@@ -1,73 +1,137 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, ArrowLeft } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase } from "lucide-react";
+import { initBehaviourTracking, getBehaviourSnapshot } from "@/utils/trackBehaviour";
 
-export function RegistrationForm() {
+interface RegistrationFormProps {
+  typeFilter?: string;
+}
+
+export function RegistrationForm({ typeFilter = "ppc_masterclass" }: RegistrationFormProps) {
   const searchParams = useSearchParams();
-  const [utmParams, setUtmParams] = useState({
-    utm_source: "",
-    utm_medium: "",
-    utm_campaign: "",
-    utm_term: "",
-    utm_content: "",
-  });
-
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [isOtpStep, setIsOtpStep] = useState(false);
+  const [token, setToken] = useState("");
   const [otp, setOtp] = useState("");
-  const [formData, setFormData] = useState<any>(null);
+  const [error, setError] = useState("");
+  const [resendTimer, setResendTimer] = useState(0);
+
+  const [formData, setFormData] = useState({
+    fullName: "",
+    email: "",
+    phone: "",
+    status: "",
+    city: "",
+  });
+
+  const utmRef = useRef<any>({});
+  const gclidRef = useRef<string | null>(null);
 
   useEffect(() => {
-    setUtmParams({
-      utm_source: searchParams.get("utm_source") || "",
-      utm_medium: searchParams.get("utm_medium") || "",
-      utm_campaign: searchParams.get("utm_campaign") || "",
-      utm_term: searchParams.get("utm_term") || "",
-      utm_content: searchParams.get("utm_content") || "",
-    });
-  }, [searchParams]);
+    initBehaviourTracking();
+    const params = new URLSearchParams(window.location.search);
+    utmRef.current = {
+      utm_source: params.get("utm_source") || "direct",
+      utm_medium: params.get("utm_medium") || "",
+      utm_campaign: params.get("utm_campaign") || "",
+      utm_term: params.get("utm_term") || "",
+      utm_content: params.get("utm_content") || "",
+    };
+    const gclid = params.get("gclid") || sessionStorage.getItem("gclid");
+    if (gclid) {
+      gclidRef.current = gclid;
+      sessionStorage.setItem("gclid", gclid);
+    }
+  }, []);
 
-  const handleInitialSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (resendTimer > 0) interval = setInterval(() => setResendTimer(t => t - 1), 1000);
+    return () => clearInterval(interval);
+  }, [resendTimer]);
 
-    const formDataObj = new FormData(e.currentTarget);
-    const data = Object.fromEntries(formDataObj.entries());
-    setFormData(data);
-
-    // Simulate API call to send OTP
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-
-    setIsLoading(false);
-    setIsOtpStep(true);
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+    setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+    if (error) setError("");
   };
 
-  const handleOtpSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleInitialSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!/^[6-9]\d{9}$/.test(formData.phone)) {
+      setError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+
     setIsLoading(true);
+    setError("");
 
     try {
-      const res = await fetch('/api/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...formData, ...utmParams, otp })
+      const behaviour = getBehaviourSnapshot();
+      const res = await fetch("/api/otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...formData,
+          ...utmRef.current,
+          gclid: gclidRef.current,
+          typeFilter,
+          behaviour,
+          sourceName: "ExcelToAI_Masterclass",
+          landingPageUrl: window.location.href,
+        }),
       });
-      
-      if (!res.ok) throw new Error('Failed to register');
 
-      // Fire Meta Pixel events
-      if (typeof window !== "undefined" && (window as any).fbq) {
-        (window as any).fbq("track", "Lead");
-        (window as any).fbq("trackCustom", "MasterclassRegistered", { topic: "excel_to_ai" });
+      const result = await res.json();
+      if (result.success) {
+        if (result.fallback) {
+          setIsSuccess(true);
+          setTimeout(() => {
+            window.location.href = `/thankyou-for-registration?email=${encodeURIComponent(formData.email)}`;
+          }, 1500);
+        } else {
+          setToken(result.token);
+          setIsOtpStep(true);
+          setResendTimer(60);
+        }
+      } else {
+        setError(result.error || "Something went wrong. Please try again.");
       }
+    } catch (err) {
+      setError("Connection error. Please try again.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
-      setIsSuccess(true);
-    } catch (error) {
-      console.error(error);
-      alert('Something went wrong. Please try again.');
+  const handleOtpSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (otp.length !== 4) return;
+
+    setIsLoading(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token, otp_entered: otp, mobile: formData.phone }),
+      });
+
+      const result = await res.json();
+      if (result.success) {
+        setIsSuccess(true);
+        // Full page navigation to preserve referer for Cloudflare routing
+        setTimeout(() => {
+          window.location.href = `/thankyou-for-registration?email=${encodeURIComponent(formData.email)}`;
+        }, 1500);
+      } else {
+        setError(result.error || "Invalid code. Please try again.");
+      }
+    } catch (err) {
+      setError("Verification failed.");
     } finally {
       setIsLoading(false);
     }
@@ -75,148 +139,75 @@ export function RegistrationForm() {
 
   if (isSuccess) {
     return (
-      <div className="bg-[#00DF83]/10 text-[#003368] p-4 rounded-lg text-center border border-[#00DF83]/30">
-        <h3 className="text-lg font-bold mb-2">Registration Confirmed!</h3>
-        <p className="text-sm leading-relaxed font-normal">Check your email for the Zoom link. We can't wait to see you there!</p>
+      <div className="bg-[#00DF83]/10 text-[#003368] p-8 rounded-2xl text-center border border-[#00DF83]/30">
+        <CheckCircle2 className="w-16 h-16 text-[#00DF83] mx-auto mb-4" />
+        <h3 className="text-2xl font-bold mb-2">You're Registered!</h3>
+        <p className="text-sm">Check your WhatsApp and Email for the Zoom link. We look forward to seeing you there!</p>
       </div>
     );
   }
 
   if (isOtpStep) {
     return (
-      <form onSubmit={handleOtpSubmit} className="space-y-4 text-left">
-        <div>
-          <button 
-            type="button" 
-            onClick={() => setIsOtpStep(false)}
-            className="text-[10px] text-slate-500 hover:text-[#003368] flex items-center gap-1 mb-4 font-semibold transition-colors"
-          >
-            <ArrowLeft className="w-3 h-3" /> Back
-          </button>
-          
-          <h3 className="text-sm font-bold text-[#003368] mb-2">Verify your phone number</h3>
-          <p className="text-[10px] text-slate-500 mb-4 font-normal">
-            We've sent a one-time password to {formData?.phone}. Please enter it below.
-          </p>
-          
-          <label className="block text-[10px] font-semibold mb-1 text-[#003368]">Enter OTP</label>
+      <div className="animate-in slide-in-from-right duration-300">
+        <button type="button" onClick={() => setIsOtpStep(false)} className="text-[10px] text-slate-500 mb-6 flex items-center gap-1 font-semibold"><ArrowLeft className="w-3 h-3" /> Edit Details</button>
+        <h3 className="text-lg font-bold text-[#003368] mb-1">Verify your number</h3>
+        <p className="text-xs text-slate-500 mb-6">We've sent a 4-digit code to {formData.phone} via WhatsApp.</p>
+        <form onSubmit={handleOtpSubmit} className="space-y-6">
           <input
             type="text"
             required
-            maxLength={6}
+            maxLength={4}
             value={otp}
             onChange={(e) => setOtp(e.target.value.replace(/\D/g, ''))}
-            placeholder="000000"
-            className="w-full border border-gray-200 rounded-lg px-3 py-3 text-sm outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50 text-center tracking-[0.5em] font-mono"
+            placeholder="----"
+            className="w-full border border-gray-200 rounded-xl py-4 text-2xl text-center tracking-[1em] font-mono font-bold bg-gray-50 focus:ring-2 focus:ring-[#00DF83] outline-none"
           />
-        </div>
-
-        <button 
-          type="submit" 
-          disabled={isLoading || otp.length < 4}
-          className="w-full bg-[#00DF83] hover:bg-[#00c574] text-[#003368] font-bold py-3 rounded-lg text-sm transition-all shadow-md shadow-[#00DF83]/15 flex items-center justify-center gap-2 disabled:opacity-70"
-        >
-          {isLoading ? (
-            <><Loader2 className="h-5 w-5 animate-spin" /> Verifying...</>
-          ) : (
-            <>Verify & Complete Registration</>
-          )}
-        </button>
-      </form>
+          {error && <p className="text-xs text-red-500 text-center">{error}</p>}
+          <button type="submit" disabled={isLoading || otp.length < 4} className="w-full bg-[#00DF83] text-[#003368] font-bold py-4 rounded-xl shadow-lg shadow-[#00DF83]/20 disabled:opacity-50">
+            {isLoading ? <Loader2 className="animate-spin mx-auto" /> : "Verify & Complete →"}
+          </button>
+        </form>
+      </div>
     );
   }
 
   return (
-    <form onSubmit={handleInitialSubmit} className="space-y-3 text-left">
-      <div>
-        <label className="block text-[10px] font-semibold mb-1 text-[#003368]">Full Name</label>
-        <input
-          type="text"
-          name="fullName"
-          required
-          defaultValue={formData?.fullName || ""}
-          placeholder="Enter your full name"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50"
-        />
-      </div>
-
-      <div>
-        <label className="block text-[10px] font-semibold mb-1 text-[#003368]">Email Address</label>
-        <input
-          type="email"
-          name="email"
-          required
-          defaultValue={formData?.email || ""}
-          placeholder="you@example.com"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50"
-        />
-        <p className="text-[10px] text-gray-400 mt-0.5 font-normal italic">Use the email registered with your Zoom account.</p>
-      </div>
-
-      <div>
-        <label className="block text-[10px] font-semibold mb-1 text-[#003368]">Phone Number</label>
-        <input
-          type="tel"
-          name="phone"
-          required
-          pattern="[0-9]{10,12}"
-          defaultValue={formData?.phone || ""}
-          placeholder="10-digit mobile number"
-          className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50"
-        />
-      </div>
-
-      <div className="grid md:grid-cols-2 gap-4">
+    <form onSubmit={handleInitialSubmit} className="space-y-4">
+      <div className="grid grid-cols-1 gap-4">
         <div>
-          <label className="block text-[10px] font-semibold mb-1 text-[#003368]">Current Status</label>
-          <select 
-            name="status"
-            required
-            defaultValue={formData?.status || ""}
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50 appearance-none text-xs"
-          >
-            <option value="">Select</option>
-            <option value="Student">Student</option>
-            <option value="Working professional">Working professional</option>
-            <option value="Career switcher">Career switcher</option>
-            <option value="Other">Other</option>
-          </select>
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><User className="w-3 h-3" /> Full Name</label>
+          <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
         </div>
-
         <div>
-          <label className="block text-[10px] font-semibold mb-1 text-[#003368]">City</label>
-          <input
-            type="text"
-            name="city"
-            defaultValue={formData?.city || ""}
-            placeholder="Your city"
-            className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none focus:ring-1 focus:ring-[#00DF83] transition-all bg-gray-50/50 text-xs"
-          />
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Mail className="w-3 h-3" /> Email</label>
+          <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="Email address" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Phone className="w-3 h-3" /> WhatsApp Number</label>
+          <input type="tel" name="phone" required maxLength={10} value={formData.phone} onChange={handleInputChange} placeholder="10-digit number" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+        </div>
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Briefcase className="w-3 h-3" /> Status</label>
+            <select name="status" required value={formData.status} onChange={handleInputChange} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50 appearance-none">
+              <option value="">Select</option>
+              <option value="Student">Student</option>
+              <option value="Working professional">Working professional</option>
+              <option value="Career switcher">Career switcher</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> City</label>
+            <input type="text" name="city" required value={formData.city} onChange={handleInputChange} placeholder="City" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          </div>
         </div>
       </div>
-
-      {/* Hidden inputs for UTM tracking */}
-      <input type="hidden" name="utm_source" value={utmParams.utm_source} />
-      <input type="hidden" name="utm_medium" value={utmParams.utm_medium} />
-      <input type="hidden" name="utm_campaign" value={utmParams.utm_campaign} />
-      <input type="hidden" name="utm_term" value={utmParams.utm_term} />
-      <input type="hidden" name="utm_content" value={utmParams.utm_content} />
-
-      <button 
-        type="submit" 
-        disabled={isLoading}
-        className="w-full bg-[#00DF83] hover:bg-[#00c574] text-[#003368] font-bold py-3 rounded-lg text-sm transition-all shadow-md shadow-[#00DF83]/15 flex items-center justify-center gap-2 disabled:opacity-70"
-      >
-        {isLoading ? (
-          <><Loader2 className="h-5 w-5 animate-spin" /> Sending OTP...</>
-        ) : (
-          <>Continue →</>
-        )}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      <button type="submit" disabled={isLoading} className="w-full bg-[#00DF83] text-[#003368] font-bold py-4 rounded-xl shadow-lg shadow-[#00DF83]/20 mt-4 group">
+        {isLoading ? <Loader2 className="animate-spin mx-auto" /> : <>Register Now <span className="inline-block group-hover:translate-x-1 transition-transform">→</span></>}
       </button>
-      
-      <p className="text-center text-xs text-gray-400 mt-4 font-normal">
-        We'll send an OTP to verify your phone number.
-      </p>
+      <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest mt-4">Instant OTP via WhatsApp</p>
     </form>
   );
 }
