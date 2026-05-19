@@ -49,6 +49,20 @@ export type ZoomRegistrantInput = {
   city?: string;
 };
 
+/**
+ * Some Zoom accounts strictly validate the phone field and reject raw 10-digit
+ * Indian numbers. Normalize to E.164 (+91...) when the input looks Indian.
+ */
+function normalizePhone(raw?: string): string | undefined {
+  if (!raw) return undefined;
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return undefined;
+  if (digits.length === 10) return `+91${digits}`;
+  if (digits.startsWith('91') && digits.length === 12) return `+${digits}`;
+  if (raw.trim().startsWith('+')) return raw.trim();
+  return `+${digits}`;
+}
+
 export type ZoomRegistrationResult =
   | { ok: true; joinUrl: string; registrantId: string }
   | { ok: false; error: string };
@@ -89,7 +103,8 @@ export async function registerWebinarParticipant(
       first_name: firstName,
       last_name: (input.lastName || '').trim(),
     };
-    if (input.phone) payload.phone = input.phone;
+    const normalizedPhone = normalizePhone(input.phone);
+    if (normalizedPhone) payload.phone = normalizedPhone;
     if (input.city) payload.city = input.city;
 
     const res = await fetch(
