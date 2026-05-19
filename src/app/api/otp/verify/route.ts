@@ -1,19 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { addRegistration } from '@/lib/db';
+import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
 
-const LSQ_ACCESS = process.env.LSQ_ACCESS || 'u$rfdb83f05f0b66fc1db816ac810a2e0d3';
-const LSQ_SECRET = process.env.LSQ_SECRET || '5d1e931f0b5e3bbbdf4bfa24a3486e133c46cbb4';
+function requireEnv(name: string): string {
+  const v = process.env[name];
+  if (!v) throw new Error(`Missing required env var: ${name}`);
+  return v;
+}
 
 async function updateLeadSquaredToVerified(phone: string) {
   try {
-    const searchUrl = `https://api-in21.leadsquared.com/v2/LeadManagement.svc/RetrieveLeadByPhoneNumber?accessKey=${LSQ_ACCESS}&secretKey=${LSQ_SECRET}&phone=${encodeURIComponent(phone)}`;
+    const access = requireEnv('LSQ_ACCESS');
+    const secret = requireEnv('LSQ_SECRET');
+    const searchUrl = `https://api-in21.leadsquared.com/v2/LeadManagement.svc/RetrieveLeadByPhoneNumber?accessKey=${access}&secretKey=${secret}&phone=${encodeURIComponent(phone)}`;
     const searchRes = await fetch(searchUrl);
     const searchData = await searchRes.json();
 
     if (searchRes.ok && searchData && searchData.length > 0) {
       const prospectId = searchData[0].ProspectID;
-      const updateUrl = `https://api-in21.leadsquared.com/v2/LeadManagement.svc/Lead.Update?accessKey=${LSQ_ACCESS}&secretKey=${LSQ_SECRET}&leadId=${prospectId}`;
+      const updateUrl = `https://api-in21.leadsquared.com/v2/LeadManagement.svc/Lead.Update?accessKey=${access}&secretKey=${secret}&leadId=${prospectId}`;
       await fetch(updateUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -27,15 +33,17 @@ async function updateLeadSquaredToVerified(phone: string) {
 
 export async function POST(req: NextRequest) {
   try {
-    const { token, otp_entered, mobile } = await req.json();
+    const body = await req.json();
+    const { token, otp_entered, eventId: incomingEventId, fbp, fbc, landingPageUrl } = body;
 
     if (!token || !otp_entered) {
       return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
     }
 
-    const hmacSecret = process.env.OTP_HMAC_SECRET || 'secret';
+    const hmacSecret = requireEnv('OTP_HMAC_SECRET');
+    if (hmacSecret.length < 32) throw new Error('OTP_HMAC_SECRET must be at least 32 chars');
     const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    const { expiry, hmac, fullName, email, phone, city, typeFilter } = decoded;
+    const { expiry, hmac, fullName, email, phone, city, zoomJoinUrl } = decoded;
 
     // 1. Check Expiry
     if (Date.now() > expiry) {
@@ -60,7 +68,45 @@ export async function POST(req: NextRequest) {
       city
     });
 
-    return NextResponse.json({ success: true, verified: true });
+    // 5. Fire Meta CAPI CompleteRegistration (deduped against browser pixel via eventId)
+    const { ip, userAgent } = extractClientContext(req);
+    const nameParts = (fullName || '').split(' ').filter(Boolean);
+    const firstName = nameParts[0] || fullName || '';
+    const lastName = nameParts.slice(1).join(' ');
+    const completeEventId: string = (typeof incomingEventId === 'string' && incomingEventId)
+      ? incomingEventId
+      : crypto.randomUUID();
+
+    sendMetaCapiEvent({
+      eventName: 'CompleteRegistration',
+      eventId: completeEventId,
+      eventSourceUrl: landingPageUrl,
+      userData: {
+        email,
+        phone,
+        firstName,
+        lastName,
+        city,
+        country: 'in',
+        clientIp: ip,
+        clientUserAgent: userAgent,
+        fbp,
+        fbc,
+        externalId: email,
+      },
+      customData: {
+        status: 'Verified',
+      },
+    }).then(result => {
+      if (!result.ok) console.error('[Meta CAPI CompleteRegistration] Failed:', result.error);
+    });
+
+    return NextResponse.json({
+      success: true,
+      verified: true,
+      zoomJoinUrl: zoomJoinUrl || '',
+      completeEventId,
+    });
 
   } catch (error) {
     console.error('Verify OTP error:', error);

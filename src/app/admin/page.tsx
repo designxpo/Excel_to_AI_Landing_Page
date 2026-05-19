@@ -1,13 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, LogOut, UploadCloud } from "lucide-react";
+import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 
+type FaqItem = { id: string; q: string; a: string; order: number };
+
 export default function AdminPortal() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"settings" | "registrations">("settings");
+  const [activeTab, setActiveTab] = useState<"settings" | "registrations" | "faqs">("settings");
   
   // Settings State
   const [settings, setSettings] = useState({
@@ -24,6 +26,12 @@ export default function AdminPortal() {
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [isLoadingRegs, setIsLoadingRegs] = useState(false);
 
+  // FAQs State
+  const [faqs, setFaqs] = useState<FaqItem[]>([]);
+  const [isLoadingFaqs, setIsLoadingFaqs] = useState(false);
+  const [isSavingFaqs, setIsSavingFaqs] = useState(false);
+  const [faqMessage, setFaqMessage] = useState("");
+
   useEffect(() => {
     // Fetch Settings
     fetch('/api/settings').then(res => res.json()).then(data => setSettings(data));
@@ -39,11 +47,83 @@ export default function AdminPortal() {
       });
   };
 
+  const loadFaqs = () => {
+    setIsLoadingFaqs(true);
+    fetch('/api/faqs')
+      .then(res => res.json())
+      .then((data: FaqItem[]) => {
+        setFaqs(Array.isArray(data) ? data : []);
+        setIsLoadingFaqs(false);
+      })
+      .catch(() => {
+        setFaqMessage("Failed to load FAQs.");
+        setIsLoadingFaqs(false);
+      });
+  };
+
   useEffect(() => {
     if (activeTab === "registrations") {
       loadRegistrations();
     }
+    if (activeTab === "faqs") {
+      loadFaqs();
+    }
   }, [activeTab]);
+
+  const handleFaqChange = (idx: number, field: 'q' | 'a', value: string) => {
+    setFaqs(prev => prev.map((f, i) => (i === idx ? { ...f, [field]: value } : f)));
+  };
+
+  const handleFaqAdd = () => {
+    setFaqs(prev => [
+      ...prev,
+      { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, q: '', a: '', order: prev.length }
+    ]);
+  };
+
+  const handleFaqDelete = (idx: number) => {
+    setFaqs(prev => prev.filter((_, i) => i !== idx));
+  };
+
+  const handleFaqMove = (idx: number, direction: -1 | 1) => {
+    setFaqs(prev => {
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next.map((f, i) => ({ ...f, order: i }));
+    });
+  };
+
+  const handleFaqsSave = async () => {
+    const invalid = faqs.find(f => !f.q.trim() || !f.a.trim());
+    if (invalid) {
+      setFaqMessage("Every FAQ must have both a question and an answer.");
+      setTimeout(() => setFaqMessage(""), 3000);
+      return;
+    }
+    setIsSavingFaqs(true);
+    setFaqMessage("");
+    try {
+      const payload = faqs.map(({ id, q, a }) => ({ id, q, a }));
+      const res = await fetch('/api/faqs', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFaqs(data.faqs);
+        setFaqMessage("FAQs saved successfully!");
+      } else {
+        setFaqMessage(data.error || "Failed to save FAQs.");
+      }
+    } catch (err) {
+      setFaqMessage("Error saving FAQs.");
+    }
+    setIsSavingFaqs(false);
+    setTimeout(() => setFaqMessage(""), 3000);
+  };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,11 +195,17 @@ export default function AdminPortal() {
               >
                 Landing Page Settings
               </button>
-              <button 
+              <button
                 onClick={() => setActiveTab("registrations")}
                 className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'registrations' ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Registrations Database
+              </button>
+              <button
+                onClick={() => setActiveTab("faqs")}
+                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'faqs' ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Common Questions
               </button>
             </div>
             <button 
@@ -254,6 +340,110 @@ export default function AdminPortal() {
                   </table>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* FAQs Tab */}
+          {activeTab === "faqs" && (
+            <div className="max-w-3xl">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-[#003368]">Common Questions</h2>
+                  <p className="text-sm text-slate-500 mt-1">Add, edit, reorder, or delete the FAQs shown on the landing page.</p>
+                </div>
+                <button
+                  onClick={handleFaqAdd}
+                  className="flex items-center gap-2 bg-[#00DF83] hover:bg-[#00C975] text-[#003368] font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                >
+                  <Plus className="w-4 h-4" /> Add FAQ
+                </button>
+              </div>
+
+              {isLoadingFaqs ? (
+                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#00DF83] animate-spin" /></div>
+              ) : faqs.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                  No FAQs yet. Click "Add FAQ" to create the first one.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {faqs.map((faq, idx) => (
+                    <div key={faq.id} className="bg-white border border-slate-200 rounded-xl p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <span className="text-xs font-semibold text-slate-400 mt-2">#{idx + 1}</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => handleFaqMove(idx, -1)}
+                            disabled={idx === 0}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move up"
+                          >
+                            <ArrowUp className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFaqMove(idx, 1)}
+                            disabled={idx === faqs.length - 1}
+                            className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed"
+                            title="Move down"
+                          >
+                            <ArrowDown className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleFaqDelete(idx)}
+                            className="p-1.5 rounded-md text-red-500 hover:bg-red-50"
+                            title="Delete"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Question</label>
+                          <input
+                            type="text"
+                            value={faq.q}
+                            maxLength={300}
+                            onChange={e => handleFaqChange(idx, 'q', e.target.value)}
+                            placeholder="e.g. Is this really free?"
+                            className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Answer</label>
+                          <textarea
+                            rows={3}
+                            value={faq.a}
+                            maxLength={2000}
+                            onChange={e => handleFaqChange(idx, 'a', e.target.value)}
+                            placeholder="Answer shown to visitors..."
+                            className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 pt-6 mt-2 border-t border-slate-200">
+                <button
+                  type="button"
+                  onClick={handleFaqsSave}
+                  disabled={isSavingFaqs || isLoadingFaqs}
+                  className="bg-[#003368] hover:bg-[#002244] text-white font-bold py-2 px-6 rounded-lg text-sm transition-all flex items-center gap-2 disabled:opacity-60"
+                >
+                  {isSavingFaqs ? <><Loader2 className="w-4 h-4 animate-spin"/> Saving...</> : "Save Changes"}
+                </button>
+                {faqMessage && (
+                  <span className={`text-sm font-semibold ${faqMessage.includes('success') ? 'text-[#00DF83]' : 'text-red-500'}`}>
+                    {faqMessage}
+                  </span>
+                )}
+              </div>
             </div>
           )}
 

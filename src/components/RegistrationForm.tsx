@@ -2,11 +2,24 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
-import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase, Megaphone } from "lucide-react";
 import { initBehaviourTracking, getBehaviourSnapshot } from "@/utils/trackBehaviour";
 
 interface RegistrationFormProps {
   typeFilter?: string;
+}
+
+function readCookie(name: string): string | undefined {
+  if (typeof document === 'undefined') return undefined;
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name.replace(/[-.+*]/g, '\\$&') + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : undefined;
+}
+
+function newEventId(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+  return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export function RegistrationForm({ typeFilter = "ppc_masterclass" }: RegistrationFormProps) {
@@ -15,9 +28,17 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
   const [isSuccess, setIsSuccess] = useState(false);
   const [isOtpStep, setIsOtpStep] = useState(false);
   const [token, setToken] = useState("");
+  const [zoomJoinUrl, setZoomJoinUrl] = useState("");
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
+
+  const buildThankYouUrl = (extras: { zoomJoinUrl?: string } = {}) => {
+    const params = new URLSearchParams();
+    params.set('email', formData.email);
+    if (extras.zoomJoinUrl) params.set('zoom_url', extras.zoomJoinUrl);
+    return `/thankyou-for-registration?${params.toString()}`;
+  };
 
   const [formData, setFormData] = useState({
     fullName: "",
@@ -25,6 +46,7 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
     phone: "",
     status: "",
     city: "",
+    referralSource: "",
   });
 
   const utmRef = useRef<any>({});
@@ -70,6 +92,10 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
 
     try {
       const behaviour = getBehaviourSnapshot();
+      const leadEventId = newEventId();
+      const fbp = readCookie('_fbp');
+      const fbc = readCookie('_fbc');
+
       const res = await fetch("/api/otp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -81,15 +107,28 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
           behaviour,
           sourceName: "ExcelToAI_Masterclass",
           landingPageUrl: window.location.href,
+          eventId: leadEventId,
+          fbp,
+          fbc,
         }),
       });
 
       const result = await res.json();
       if (result.success) {
+        // Fire browser-side Meta Pixel Lead event with same eventID as the server CAPI call.
+        if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+          window.fbq('track', 'Lead', {
+            content_name: 'ExcelToAI_Masterclass',
+            content_category: typeFilter,
+          }, { eventID: leadEventId });
+        }
+
+        const incomingZoomUrl: string = result.zoomJoinUrl || "";
+        setZoomJoinUrl(incomingZoomUrl);
         if (result.fallback) {
           setIsSuccess(true);
           setTimeout(() => {
-            window.location.href = `/thankyou-for-registration?email=${encodeURIComponent(formData.email)}`;
+            window.location.href = buildThankYouUrl({ zoomJoinUrl: incomingZoomUrl });
           }, 1500);
         } else {
           setToken(result.token);
@@ -114,18 +153,42 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
     setError("");
 
     try {
+      const completeEventId = newEventId();
+      const fbp = readCookie('_fbp');
+      const fbc = readCookie('_fbc');
+
       const res = await fetch("/api/otp/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, otp_entered: otp, mobile: formData.phone }),
+        body: JSON.stringify({
+          token,
+          otp_entered: otp,
+          mobile: formData.phone,
+          eventId: completeEventId,
+          fbp,
+          fbc,
+          landingPageUrl: window.location.href,
+        }),
       });
 
       const result = await res.json();
       if (result.success) {
+        // Fire browser-side Meta Pixel CompleteRegistration with the same eventID as the server CAPI call.
+        if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
+          window.fbq('track', 'CompleteRegistration', {
+            content_name: 'ExcelToAI_Masterclass',
+            content_category: typeFilter,
+            status: 'Verified',
+          }, { eventID: completeEventId });
+        }
+
         setIsSuccess(true);
+        // Prefer the URL returned by /verify (decoded from the signed token).
+        // Fall back to the one captured at /send if /verify didn't echo it.
+        const finalZoomUrl: string = result.zoomJoinUrl || zoomJoinUrl;
         // Full page navigation to preserve referer for Cloudflare routing
         setTimeout(() => {
-          window.location.href = `/thankyou-for-registration?email=${encodeURIComponent(formData.email)}`;
+          window.location.href = buildThankYouUrl({ zoomJoinUrl: finalZoomUrl });
         }, 1500);
       } else {
         setError(result.error || "Invalid code. Please try again.");
@@ -201,6 +264,17 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
             <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> City</label>
             <input type="text" name="city" required value={formData.city} onChange={handleInputChange} placeholder="City" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
           </div>
+        </div>
+        <div>
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Megaphone className="w-3 h-3" /> How did you hear about this masterclass?</label>
+          <select name="referralSource" required value={formData.referralSource} onChange={handleInputChange} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50 appearance-none">
+            <option value="">Select</option>
+            <option value="Counselor">Counselor</option>
+            <option value="Social Media">Social Media</option>
+            <option value="Email Invite">Email Invite</option>
+            <option value="WhatsApp Invite">WhatsApp Invite</option>
+            <option value="Word of Mouth">Word of Mouth</option>
+          </select>
         </div>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}

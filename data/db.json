@@ -2,8 +2,18 @@
   "settings": {
     "speakerName": "Priyesh Mishra",
     "speakerTitle": "Co-founder & Chief Learning Officer",
-    "speakerImage": "/uploads/1778069778134_x.png",
+    "speakerImage": "/uploads/1779102375546_1736423105930.jpeg",
     "speakerBio": "A pioneer in AI and Data Science education in India. Ex-McKinsey & ZS Associates."
   },
-  "registrations": []
+  "registrations": [
+    {
+      "fullName": "Priyesh Mishra",
+      "email": "priyesh@scaletrix.ai",
+      "phone": "8368872108",
+      "status": "Verified",
+      "city": "Gurugram",
+      "id": "2pxa8hp6d",
+      "createdAt": "2026-05-18T10:49:11.812Z"
+    }
+  ]
 }

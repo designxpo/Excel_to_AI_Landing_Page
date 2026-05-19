@@ -1,7 +1,18 @@
 import { NextResponse } from 'next/server';
+import { cookies } from 'next/headers';
 import { addRegistration, getRegistrations } from '@/lib/db';
+import { verifyAdminSession } from '@/lib/auth';
+
+async function requireAdmin(): Promise<boolean> {
+  const token = (await cookies()).get('admin_session')?.value;
+  const session = await verifyAdminSession(token);
+  return session !== null;
+}
 
 export async function GET() {
+  if (!(await requireAdmin())) {
+    return new NextResponse('Unauthorized', { status: 401 });
+  }
   return NextResponse.json(getRegistrations());
 }
 
@@ -17,6 +28,7 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ success: true, registration: newReg });
   } catch (error) {
+    console.error('[Register POST] error:', error);
     return NextResponse.json({ success: false, error: 'Failed to register' }, { status: 500 });
   }
 }

@@ -51,9 +51,13 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
   const rawName = searchParams.get('name') || '';
   const isVerified = searchParams.get('verified') === 'true';
   const courseSlug = searchParams.get('course') || '';
+  const personalZoomUrl = (searchParams.get('zoom_url') || '').trim();
 
   const email = decodeURIComponent(rawEmail);
   const name = decodeURIComponent(rawName);
+
+  const effectiveWebinarUrl = personalZoomUrl || WEBINAR_URL;
+  const hasPersonalZoom = personalZoomUrl.length > 0;
 
   // Resolve per-course brochure URL from env vars if slug is present and known
   const courseBrochureUrl = courseSlug ? COURSE_BROCHURE_URLS[courseSlug] || null : null;
@@ -207,10 +211,14 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
           {/* Card 1 — Webinar */}
           <div style={cardStyle}>
             <div style={iconStyle}>🎥</div>
-            <h3 style={cardTitle}>Upcoming Webinar</h3>
-            <p style={cardBody}>Expert guidance on building a career in Data Science. Free access.</p>
-            <a href={WEBINAR_URL} target="_blank" rel="noopener noreferrer" style={btnPrimary}>
-              Save My Spot →
+            <h3 style={cardTitle}>{hasPersonalZoom ? 'Your Webinar Access' : 'Upcoming Webinar'}</h3>
+            <p style={cardBody}>
+              {hasPersonalZoom
+                ? "You're confirmed. Click below to join your masterclass when it begins — no extra signup needed."
+                : 'Expert guidance on building a career in Data Science. Free access.'}
+            </p>
+            <a href={effectiveWebinarUrl} target="_blank" rel="noopener noreferrer" style={btnPrimary}>
+              {hasPersonalZoom ? 'Join Webinar →' : 'Save My Spot →'}
             </a>
           </div>
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { getSettings, updateSettings } from '@/lib/db';
+import { getFaqs, replaceFaqs } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 import { assertSameOrigin } from '@/lib/security';
 
@@ -11,13 +11,10 @@ async function requireAdmin(): Promise<boolean> {
 }
 
 export async function GET() {
-  if (!(await requireAdmin())) {
-    return new NextResponse('Unauthorized', { status: 401 });
-  }
-  return NextResponse.json(getSettings());
+  return NextResponse.json(getFaqs());
 }
 
-export async function POST(request: Request) {
+export async function PUT(request: Request) {
   const origin = assertSameOrigin(request);
   if (!origin.ok) {
     return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
@@ -27,10 +24,16 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const updated = updateSettings(body);
-    return NextResponse.json({ success: true, settings: updated });
+    if (!Array.isArray(body)) {
+      return NextResponse.json({ success: false, error: 'Body must be an array' }, { status: 400 });
+    }
+    if (body.length > 50) {
+      return NextResponse.json({ success: false, error: 'Too many items (max 50)' }, { status: 400 });
+    }
+    const saved = replaceFaqs(body);
+    return NextResponse.json({ success: true, faqs: saved });
   } catch (error) {
-    console.error('[Settings POST] error:', error);
-    return NextResponse.json({ success: false, error: 'Failed to update settings' }, { status: 500 });
+    console.error('[FAQs PUT] error:', error);
+    return NextResponse.json({ success: false, error: 'Failed to save FAQs' }, { status: 500 });
   }
 }
