@@ -9,8 +9,9 @@ export async function proxy(req: NextRequest) {
   const isSettingsApi = url.pathname.startsWith('/api/settings');
   const isGetRegistrationsApi = url.pathname.startsWith('/api/register') && req.method === 'GET';
   const isFaqsWrite = url.pathname.startsWith('/api/faqs') && req.method !== 'GET';
+  const isUploadApi = url.pathname.startsWith('/api/upload');
 
-  if (!(isAdminRoute || isSettingsApi || isGetRegistrationsApi || isFaqsWrite)) {
+  if (!(isAdminRoute || isSettingsApi || isGetRegistrationsApi || isFaqsWrite || isUploadApi)) {
     return NextResponse.next();
   }
 
@@ -18,7 +19,7 @@ export async function proxy(req: NextRequest) {
   const session = await verifyAdminSession(token);
 
   if (!session) {
-    if (isSettingsApi || isGetRegistrationsApi || isFaqsWrite) {
+    if (isSettingsApi || isGetRegistrationsApi || isFaqsWrite || isUploadApi) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
     return NextResponse.redirect(new URL('/admin/login', req.url));
@@ -28,5 +29,5 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/settings/:path*', '/api/register', '/api/faqs'],
+  matcher: ['/admin/:path*', '/api/settings/:path*', '/api/register', '/api/faqs', '/api/upload'],
 };

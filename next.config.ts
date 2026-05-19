@@ -11,6 +11,11 @@ const nextConfig: NextConfig = {
         protocol: 'https',
         hostname: 'www.analytixlabs.co.in',
       },
+      {
+        protocol: 'https',
+        hostname: 'qhgelnkakutzbuvowxzj.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
     ],
   },
 };
