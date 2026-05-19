@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
     await updateLeadSquaredToVerified(phone);
 
     // 4. Save to Local DB (for Admin Portal)
-    addRegistration({
+    await addRegistration({
       fullName,
       email,
       phone,

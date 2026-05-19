@@ -10,9 +10,8 @@ export const dynamic = 'force-dynamic';
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://careersuccess.analytixlabs.co.in';
 
-export default function MasterclassLandingPage() {
-  const settings = getSettings();
-  const faqs = getFaqs();
+export default async function MasterclassLandingPage() {
+  const [settings, faqs] = await Promise.all([getSettings(), getFaqs()]);
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden pb-[88px]">
       <SeoJsonLd siteUrl={SITE_URL} speaker={settings} faqs={faqs} />

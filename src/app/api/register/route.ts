@@ -13,13 +13,13 @@ export async function GET() {
   if (!(await requireAdmin())) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
-  return NextResponse.json(getRegistrations());
+  return NextResponse.json(await getRegistrations());
 }
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const newReg = addRegistration({
+    const newReg = await addRegistration({
       fullName: body.fullName,
       email: body.email,
       phone: body.phone,

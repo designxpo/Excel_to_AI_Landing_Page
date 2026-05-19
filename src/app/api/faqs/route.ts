@@ -11,7 +11,7 @@ async function requireAdmin(): Promise<boolean> {
 }
 
 export async function GET() {
-  return NextResponse.json(getFaqs());
+  return NextResponse.json(await getFaqs());
 }
 
 export async function PUT(request: Request) {
@@ -30,7 +30,7 @@ export async function PUT(request: Request) {
     if (body.length > 50) {
       return NextResponse.json({ success: false, error: 'Too many items (max 50)' }, { status: 400 });
     }
-    const saved = replaceFaqs(body);
+    const saved = await replaceFaqs(body);
     return NextResponse.json({ success: true, faqs: saved });
   } catch (error) {
     console.error('[FAQs PUT] error:', error);

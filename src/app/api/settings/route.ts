@@ -14,7 +14,7 @@ export async function GET() {
   if (!(await requireAdmin())) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
-  return NextResponse.json(getSettings());
+  return NextResponse.json(await getSettings());
 }
 
 export async function POST(request: Request) {
@@ -27,7 +27,7 @@ export async function POST(request: Request) {
   }
   try {
     const body = await request.json();
-    const updated = updateSettings(body);
+    const updated = await updateSettings(body);
     return NextResponse.json({ success: true, settings: updated });
   } catch (error) {
     console.error('[Settings POST] error:', error);
