@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/zoom';
 import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
+import { findRegistrationByEmailOrPhone } from '@/lib/db';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -122,6 +123,20 @@ export async function POST(req: NextRequest) {
 
     if (!fullName || !email || !phone) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // 0. Block duplicates — if this email or phone already completed registration,
+    // don't burn another OTP / Zoom slot / LSQ lead.
+    const existing = await findRegistrationByEmailOrPhone(email, phone);
+    if (existing) {
+      return NextResponse.json(
+        {
+          success: false,
+          duplicate: true,
+          error: 'This email or phone is already registered for the masterclass. Check your inbox for the Zoom join link.',
+        },
+        { status: 409 },
+      );
     }
 
     // 1. Generate OTP & HMAC

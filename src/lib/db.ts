@@ -136,6 +136,39 @@ export async function getRegistrations(): Promise<Registration[]> {
   }
 }
 
+/**
+ * Returns an existing registration matching `email` (case-insensitive) OR `phone`.
+ * Used to prevent duplicate signups before any external systems (WhatsApp, Zoom,
+ * LeadSquared) are called.
+ */
+export async function findRegistrationByEmailOrPhone(
+  email: string,
+  phone: string,
+): Promise<Registration | null> {
+  const normEmail = email.trim().toLowerCase();
+  const normPhone = phone.replace(/\D/g, '');
+  if (!normEmail && !normPhone) return null;
+
+  try {
+    const supabase = client();
+    const [byEmail, byPhone] = await Promise.all([
+      normEmail
+        ? supabase.from('registrations').select('*').ilike('email', normEmail).limit(1)
+        : Promise.resolve({ data: null, error: null }),
+      normPhone
+        ? supabase.from('registrations').select('*').eq('phone', normPhone).limit(1)
+        : Promise.resolve({ data: null, error: null }),
+    ]);
+    if (byEmail.error) throw byEmail.error;
+    if (byPhone.error) throw byPhone.error;
+    const row = (byEmail.data?.[0] ?? byPhone.data?.[0]) as RegistrationRow | undefined;
+    return row ? mapRegistration(row) : null;
+  } catch (err) {
+    console.error('[db.findRegistrationByEmailOrPhone]', err);
+    return null;
+  }
+}
+
 export async function addRegistration(reg: Omit<Registration, 'id' | 'createdAt'>): Promise<Registration> {
   const row: RegistrationRow = {
     id: shortId(),
