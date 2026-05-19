@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import Image from "next/image";
 import { RegistrationForm } from "@/components/RegistrationForm";
+import { StickyCta } from "@/components/StickyCta";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { getSettings, getFaqs } from "@/lib/db";
 import SeoJsonLd from "@/components/SeoJsonLd";
@@ -13,19 +14,19 @@ export default function MasterclassLandingPage() {
   const settings = getSettings();
   const faqs = getFaqs();
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden">
+    <div className="min-h-screen bg-slate-50 text-slate-900 overflow-x-hidden pb-[88px]">
       <SeoJsonLd siteUrl={SITE_URL} speaker={settings} faqs={faqs} />
       {/* Navbar */}
       <header className="w-full border-b border-slate-200 backdrop-blur-sm bg-white/90 sticky top-0 z-50">
         <div className="max-w-5xl mx-auto px-6 py-2 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Image 
-              src="/brand/alabs-logo.svg" 
-              alt="AnalytixLabs" 
-              width={180} 
-              height={42} 
+            <Image
+              src="/brand/ALabs_Masterclass.svg"
+              alt="AnalytixLabs Masterclass"
+              width={162}
+              height={48}
               priority
-              className="h-auto w-auto"
+              className="h-10 md:h-12 w-auto"
             />
           </div>
           <div className="flex items-center gap-4">
@@ -458,12 +459,12 @@ export default function MasterclassLandingPage() {
       {/* Footer */}
       <footer className="border-t border-slate-200 py-16 bg-slate-50">
         <div className="max-w-7xl mx-auto px-6 flex flex-col items-center text-center">
-          <Image 
-            src="/brand/alabs-logo.svg" 
-            alt="AnalytixLabs" 
-            width={140} 
-            height={32} 
-            className="h-8 w-auto opacity-80 mb-10"
+          <Image
+            src="/brand/ALabs_Masterclass.svg"
+            alt="AnalytixLabs Masterclass"
+            width={135}
+            height={40}
+            className="h-10 w-auto opacity-80 mb-10"
           />
           
           <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 text-sm font-semibold text-slate-400 uppercase tracking-widest mb-10">
@@ -478,6 +479,8 @@ export default function MasterclassLandingPage() {
           </p>
         </div>
       </footer>
+
+      <StickyCta />
     </div>
   );
 }
