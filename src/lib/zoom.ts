@@ -29,7 +29,8 @@ async function getZoomAccessToken(): Promise<string> {
 
   if (!res.ok) {
     const body = await res.text().catch(() => '');
-    throw new Error(`Zoom OAuth failed: ${res.status} ${body}`);
+    // 401/400 from token endpoint usually means wrong account_id, client_id, or secret.
+    throw new Error(`Zoom OAuth failed [HTTP ${res.status}]: ${body || '(empty body)'}`);
   }
 
   const data = (await res.json()) as { access_token: string; expires_in: number };
@@ -52,6 +53,20 @@ export type ZoomRegistrationResult =
   | { ok: true; joinUrl: string; registrantId: string }
   | { ok: false; error: string };
 
+function describeZoomError(status: number, body: any): string {
+  // Zoom error shape: { code: 300, message: '...', errors?: [{ field, message }] }
+  const parts: string[] = [`HTTP ${status}`];
+  if (body?.code != null) parts.push(`code=${body.code}`);
+  if (body?.message) parts.push(body.message);
+  if (Array.isArray(body?.errors) && body.errors.length) {
+    const fieldErrors = body.errors
+      .map((e: any) => `${e.field ?? '?'}: ${e.message ?? JSON.stringify(e)}`)
+      .join(' | ');
+    parts.push(`fields=[${fieldErrors}]`);
+  }
+  return parts.join(' ');
+}
+
 export async function registerWebinarParticipant(
   input: ZoomRegistrantInput
 ): Promise<ZoomRegistrationResult> {
@@ -61,12 +76,18 @@ export async function registerWebinarParticipant(
       return { ok: false, error: `ZOOM_WEBINAR_ID looks invalid (expected 9-12 digits): ${webinarId}` };
     }
 
+    // Zoom rejects empty first_name with a confusing error.
+    const firstName = (input.firstName || '').trim();
+    if (!firstName) {
+      return { ok: false, error: 'first_name is empty — cannot register with Zoom' };
+    }
+
     const token = await getZoomAccessToken();
 
     const payload: Record<string, string> = {
       email: input.email,
-      first_name: input.firstName,
-      last_name: input.lastName || '',
+      first_name: firstName,
+      last_name: (input.lastName || '').trim(),
     };
     if (input.phone) payload.phone = input.phone;
     if (input.city) payload.city = input.city;
@@ -86,14 +107,15 @@ export async function registerWebinarParticipant(
     const body = await res.json().catch(() => null);
 
     if (!res.ok) {
-      const message = body?.message || `HTTP ${res.status}`;
-      return { ok: false, error: `Zoom registrant create failed: ${message}` };
+      // If the token was rejected, clear cache so the next attempt re-auths.
+      if (res.status === 401) tokenCache = null;
+      return { ok: false, error: `Zoom registrant create failed: ${describeZoomError(res.status, body)}` };
     }
 
     if (!body?.join_url) {
       return {
         ok: false,
-        error: 'Zoom did not return a join_url. Check webinar "Approval" is set to "Automatically Approve".',
+        error: 'Zoom returned 200 but no join_url. Webinar Approval is likely set to "Manually Approve" — change to "Automatically Approve".',
       };
     }
 

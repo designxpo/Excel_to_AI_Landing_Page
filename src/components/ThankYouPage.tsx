@@ -88,7 +88,6 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
         send_to: verifiedConversionId,
         ...(userData && { user_data: userData }),
       });
-      console.log(`[ThankYouPage] Verified Lead conversion fired: ${verifiedConversionId}`);
     }
   }, [conversionId, verifiedConversionId, email, name, isVerified]);
 

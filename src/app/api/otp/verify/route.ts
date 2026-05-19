@@ -77,29 +77,35 @@ export async function POST(req: NextRequest) {
       ? incomingEventId
       : crypto.randomUUID();
 
-    sendMetaCapiEvent({
-      eventName: 'CompleteRegistration',
-      eventId: completeEventId,
-      eventSourceUrl: landingPageUrl,
-      userData: {
-        email,
-        phone,
-        firstName,
-        lastName,
-        city,
-        country: 'in',
-        clientIp: ip,
-        clientUserAgent: userAgent,
-        fbp,
-        fbc,
-        externalId: email,
-      },
-      customData: {
-        status: 'Verified',
-      },
-    }).then(result => {
+    // Awaited (not fire-and-forget) — on Vercel serverless, the function
+    // instance terminates immediately after the response is returned, which
+    // can kill an unawaited Promise before the CAPI fetch completes.
+    try {
+      const result = await sendMetaCapiEvent({
+        eventName: 'CompleteRegistration',
+        eventId: completeEventId,
+        eventSourceUrl: landingPageUrl,
+        userData: {
+          email,
+          phone,
+          firstName,
+          lastName,
+          city,
+          country: 'in',
+          clientIp: ip,
+          clientUserAgent: userAgent,
+          fbp,
+          fbc,
+          externalId: email,
+        },
+        customData: {
+          status: 'Verified',
+        },
+      });
       if (!result.ok) console.error('[Meta CAPI CompleteRegistration] Failed:', result.error);
-    });
+    } catch (err) {
+      console.error('[Meta CAPI CompleteRegistration] Threw:', err);
+    }
 
     return NextResponse.json({
       success: true,
