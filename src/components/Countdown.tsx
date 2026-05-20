@@ -2,29 +2,45 @@
 
 import { useEffect, useState } from 'react';
 
-// 7 June 2026, 11:00 AM IST = 05:30 UTC
-const TARGET_MS = new Date('2026-06-07T05:30:00.000Z').getTime();
+// Actual webinar moment: 7 June 2026, 11:00 AM IST = 05:30 UTC.
+// Until then, show a rolling 36-hour urgency timer that resets each cycle.
+const WEBINAR_MS = new Date('2026-06-07T05:30:00.000Z').getTime();
+const CYCLE_MS = 36 * 60 * 60 * 1000;
 
 function pad(n: number) {
   return n.toString().padStart(2, '0');
 }
 
+type Tick = { live: boolean; hours: number; mins: number; secs: number };
+
+function compute(now: number): Tick {
+  if (now >= WEBINAR_MS) return { live: true, hours: 0, mins: 0, secs: 0 };
+  // Position within the global 36h cycle, anchored to the Unix epoch so all
+  // visitors see the same value at the same wall-clock moment.
+  const remainingMs = CYCLE_MS - (now % CYCLE_MS);
+  return {
+    live: false,
+    hours: Math.floor(remainingMs / 3_600_000),
+    mins: Math.floor((remainingMs % 3_600_000) / 60_000),
+    secs: Math.floor((remainingMs % 60_000) / 1_000),
+  };
+}
+
 export function Countdown({ variant = 'dark' }: { variant?: 'dark' | 'light' }) {
-  const [now, setNow] = useState<number | null>(null);
+  const [tick, setTick] = useState<Tick | null>(null);
 
   useEffect(() => {
-    setNow(Date.now());
-    const id = setInterval(() => setNow(Date.now()), 1000);
+    setTick(compute(Date.now()));
+    const id = setInterval(() => setTick(compute(Date.now())), 1000);
     return () => clearInterval(id);
   }, []);
 
-  if (now === null) {
-    // SSR / first paint — render the layout but with zeros, no hydration mismatch
-    return <CountdownGrid days={0} hours={0} mins={0} secs={0} variant={variant} />;
+  if (!tick) {
+    // SSR / first paint — render zeros so layout doesn't shift on hydration.
+    return <CountdownGrid hours={0} mins={0} secs={0} variant={variant} />;
   }
 
-  const diff = Math.max(0, TARGET_MS - now);
-  if (diff === 0) {
+  if (tick.live) {
     return (
       <div className="text-center text-sm font-extrabold text-[#003368] uppercase tracking-widest py-2">
         Session in progress — join now
@@ -32,23 +48,17 @@ export function Countdown({ variant = 'dark' }: { variant?: 'dark' | 'light' }) 
     );
   }
 
-  const days = Math.floor(diff / 86_400_000);
-  const hours = Math.floor((diff % 86_400_000) / 3_600_000);
-  const mins = Math.floor((diff % 3_600_000) / 60_000);
-  const secs = Math.floor((diff % 60_000) / 1_000);
-
-  return <CountdownGrid days={days} hours={hours} mins={mins} secs={secs} variant={variant} />;
+  return <CountdownGrid hours={tick.hours} mins={tick.mins} secs={tick.secs} variant={variant} />;
 }
 
-function CountdownGrid({ days, hours, mins, secs, variant }: { days: number; hours: number; mins: number; secs: number; variant: 'dark' | 'light' }) {
+function CountdownGrid({ hours, mins, secs, variant }: { hours: number; mins: number; secs: number; variant: 'dark' | 'light' }) {
   const cellBase = variant === 'dark'
     ? 'bg-gradient-to-b from-[#003368] to-[#002854] text-white shadow-lg shadow-[#003368]/20'
     : 'bg-white border border-slate-200 text-[#003368] shadow-sm';
   const labelTone = variant === 'dark' ? 'text-white/70' : 'text-slate-500';
 
   return (
-    <div className="grid grid-cols-4 gap-2">
-      <Cell value={pad(days)} label="Days" cellBase={cellBase} labelTone={labelTone} />
+    <div className="grid grid-cols-3 gap-2">
       <Cell value={pad(hours)} label="Hours" cellBase={cellBase} labelTone={labelTone} />
       <Cell value={pad(mins)} label="Mins" cellBase={cellBase} labelTone={labelTone} />
       <Cell value={pad(secs)} label="Secs" cellBase={cellBase} labelTone={labelTone} />
