@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
 import "./globals.css";
 import Script from "next/script";
+import { getWebinarConfig } from "@/lib/db";
 
 const poppins = Poppins({
   weight: ["400", "500", "600", "700", "800", "900"],
@@ -10,36 +11,48 @@ const poppins = Poppins({
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://careersuccess.analytixlabs.co.in';
-const PAGE_TITLE = "From Excel to AI — Inside the Data Analyst & Data Scientist Workflow";
-const PAGE_DESCRIPTION = "Join our free 90-minute live session to learn how data analysts and scientists use Python and AI in 2026. Beginner-safe.";
+const FALLBACK_TITLE = "From Excel to AI — Inside the Data Analyst & Data Scientist Workflow";
+const FALLBACK_DESCRIPTION = "Join our free 90-minute live session to learn how data analysts and scientists use Python and AI in 2026. Beginner-safe.";
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
 
-export const metadata: Metadata = {
-  metadataBase: new URL(SITE_URL),
-  title: PAGE_TITLE,
-  description: PAGE_DESCRIPTION,
-  alternates: {
-    canonical: SITE_URL,
-  },
-  openGraph: {
-    type: 'website',
-    url: SITE_URL,
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
-    siteName: 'AnalytixLabs',
-    locale: 'en_IN',
-  },
-  twitter: {
-    card: 'summary_large_image',
-    title: PAGE_TITLE,
-    description: PAGE_DESCRIPTION,
-  },
-  robots: {
-    index: true,
-    follow: true,
-    googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large' },
-  },
-};
+export async function generateMetadata(): Promise<Metadata> {
+  // Read editable meta tags from the webinar config; fall back to the values
+  // the LP shipped with so unset/null fields render identically to the
+  // previous static metadata.
+  const config = await getWebinarConfig().catch(() => null);
+  const title = config?.metaTitle ?? FALLBACK_TITLE;
+  const description = config?.metaDescription ?? FALLBACK_DESCRIPTION;
+  const ogImage = config?.ogImageUrl ?? undefined;
+
+  return {
+    metadataBase: new URL(SITE_URL),
+    title,
+    description,
+    alternates: {
+      canonical: SITE_URL,
+    },
+    openGraph: {
+      type: 'website',
+      url: SITE_URL,
+      title,
+      description,
+      siteName: 'AnalytixLabs',
+      locale: 'en_IN',
+      ...(ogImage ? { images: [{ url: ogImage }] } : {}),
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+      ...(ogImage ? { images: [ogImage] } : {}),
+    },
+    robots: {
+      index: true,
+      follow: true,
+      googleBot: { index: true, follow: true, 'max-snippet': -1, 'max-image-preview': 'large' },
+    },
+  };
+}
 
 export default function RootLayout({
   children,

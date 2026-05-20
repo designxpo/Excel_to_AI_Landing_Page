@@ -47,6 +47,8 @@ export type ZoomRegistrantInput = {
   lastName?: string;
   phone?: string;
   city?: string;
+  /** Optional override for ZOOM_WEBINAR_ID env var (sourced from admin DB). */
+  webinarId?: string | null;
 };
 
 /**
@@ -85,9 +87,9 @@ export async function registerWebinarParticipant(
   input: ZoomRegistrantInput
 ): Promise<ZoomRegistrationResult> {
   try {
-    const webinarId = requireEnv('ZOOM_WEBINAR_ID');
+    const webinarId = input.webinarId?.trim() || requireEnv('ZOOM_WEBINAR_ID');
     if (!/^\d{9,12}$/.test(webinarId)) {
-      return { ok: false, error: `ZOOM_WEBINAR_ID looks invalid (expected 9-12 digits): ${webinarId}` };
+      return { ok: false, error: `Zoom webinar ID looks invalid (expected 9-12 digits): ${webinarId}` };
     }
 
     // Zoom rejects empty first_name with a confusing error.

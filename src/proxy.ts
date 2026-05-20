@@ -10,8 +10,20 @@ export async function proxy(req: NextRequest) {
   const isGetRegistrationsApi = url.pathname.startsWith('/api/register') && req.method === 'GET';
   const isFaqsWrite = url.pathname.startsWith('/api/faqs') && req.method !== 'GET';
   const isUploadApi = url.pathname.startsWith('/api/upload');
+  const isWebinarApi = url.pathname.startsWith('/api/webinar');
+  const isFeaturesWrite = url.pathname.startsWith('/api/features') && req.method !== 'GET';
+  const isAgendaWrite = url.pathname.startsWith('/api/agenda-items') && req.method !== 'GET';
 
-  if (!(isAdminRoute || isSettingsApi || isGetRegistrationsApi || isFaqsWrite || isUploadApi)) {
+  const gatedApi =
+    isSettingsApi ||
+    isGetRegistrationsApi ||
+    isFaqsWrite ||
+    isUploadApi ||
+    isWebinarApi ||
+    isFeaturesWrite ||
+    isAgendaWrite;
+
+  if (!(isAdminRoute || gatedApi)) {
     return NextResponse.next();
   }
 
@@ -19,7 +31,7 @@ export async function proxy(req: NextRequest) {
   const session = await verifyAdminSession(token);
 
   if (!session) {
-    if (isSettingsApi || isGetRegistrationsApi || isFaqsWrite || isUploadApi) {
+    if (gatedApi) {
       return new NextResponse('Unauthorized', { status: 401 });
     }
     return NextResponse.redirect(new URL('/admin/login', req.url));
@@ -29,5 +41,14 @@ export async function proxy(req: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/admin/:path*', '/api/settings/:path*', '/api/register', '/api/faqs', '/api/upload'],
+  matcher: [
+    '/admin/:path*',
+    '/api/settings/:path*',
+    '/api/register',
+    '/api/faqs',
+    '/api/upload',
+    '/api/webinar',
+    '/api/features',
+    '/api/agenda-items',
+  ],
 };

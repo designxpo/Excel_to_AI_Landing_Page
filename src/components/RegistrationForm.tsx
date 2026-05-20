@@ -5,8 +5,39 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase, Megaphone } from "lucide-react";
 import { initBehaviourTracking, getBehaviourSnapshot } from "@/utils/trackBehaviour";
 
+export interface RegistrationFormCopy {
+  labelName?: string | null;
+  labelEmail?: string | null;
+  labelPhone?: string | null;
+  labelStatus?: string | null;
+  labelCity?: string | null;
+  labelReferral?: string | null;
+  placeholderName?: string | null;
+  placeholderEmail?: string | null;
+  placeholderPhone?: string | null;
+  placeholderSelect?: string | null;
+  placeholderCity?: string | null;
+  statusOptions?: string | null;      // newline-separated
+  referralOptions?: string | null;    // newline-separated
+  ctaButtonText?: string | null;
+  otpFooterLabel?: string | null;
+  otpHeading?: string | null;
+  otpSubtitleTemplate?: string | null;
+  otpEditDetailsLabel?: string | null;
+  otpVerifyButtonText?: string | null;
+  successHeading?: string | null;
+  successBody?: string | null;
+}
+
 interface RegistrationFormProps {
   typeFilter?: string;
+  copy?: RegistrationFormCopy;
+}
+
+function parseOptions(text: string | null | undefined, fallback: string[]): string[] {
+  if (!text) return fallback;
+  const lines = text.split('\n').map(s => s.trim()).filter(Boolean);
+  return lines.length ? lines : fallback;
 }
 
 function readCookie(name: string): string | undefined {
@@ -22,7 +53,30 @@ function newEventId(): string {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function RegistrationForm({ typeFilter = "ppc_masterclass" }: RegistrationFormProps) {
+export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: RegistrationFormProps) {
+  // Resolve copy with hardcoded fallbacks matching the original page.
+  const labelName     = copy.labelName     ?? 'Full Name';
+  const labelEmail    = copy.labelEmail    ?? 'Email';
+  const labelPhone    = copy.labelPhone    ?? 'WhatsApp Number';
+  const labelStatus   = copy.labelStatus   ?? 'Status';
+  const labelCity     = copy.labelCity     ?? 'City';
+  const labelReferral = copy.labelReferral ?? 'How did you hear about this masterclass?';
+  const phName        = copy.placeholderName   ?? 'Your name';
+  const phEmail       = copy.placeholderEmail  ?? 'Email address';
+  const phPhone       = copy.placeholderPhone  ?? '10-digit number';
+  const phSelect      = copy.placeholderSelect ?? 'Select';
+  const phCity        = copy.placeholderCity   ?? 'City';
+  const statusOptions   = parseOptions(copy.statusOptions,   ['Student', 'Working professional', 'Career switcher']);
+  const referralOptions = parseOptions(copy.referralOptions, ['Counselor', 'Social Media', 'Email Invite', 'WhatsApp Invite', 'Word of Mouth']);
+  const submitText     = copy.ctaButtonText        ?? 'Register Now';
+  const otpFooterText  = copy.otpFooterLabel       ?? 'Instant OTP via WhatsApp';
+  const otpHeading     = copy.otpHeading           ?? 'Verify your number';
+  const otpSubtitle    = (copy.otpSubtitleTemplate ?? "We've sent a 4-digit code to {phone} via WhatsApp.");
+  const otpEditLabel   = copy.otpEditDetailsLabel  ?? 'Edit Details';
+  const otpVerifyText  = copy.otpVerifyButtonText  ?? 'Verify & Complete →';
+  const successHeading = copy.successHeading       ?? "You're Registered!";
+  const successBody    = copy.successBody          ?? 'Check your WhatsApp and Email for the Zoom link. We look forward to seeing you there!';
+
   const searchParams = useSearchParams();
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
@@ -204,8 +258,8 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
     return (
       <div className="bg-[#00DF83]/10 text-[#003368] p-8 rounded-2xl text-center border border-[#00DF83]/30">
         <CheckCircle2 className="w-16 h-16 text-[#00DF83] mx-auto mb-4" />
-        <h3 className="text-2xl font-bold mb-2">You're Registered!</h3>
-        <p className="text-sm">Check your WhatsApp and Email for the Zoom link. We look forward to seeing you there!</p>
+        <h3 className="text-2xl font-bold mb-2">{successHeading}</h3>
+        <p className="text-sm">{successBody}</p>
       </div>
     );
   }
@@ -213,9 +267,9 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
   if (isOtpStep) {
     return (
       <div className="animate-in slide-in-from-right duration-300">
-        <button type="button" onClick={() => setIsOtpStep(false)} className="text-[10px] text-slate-500 mb-6 flex items-center gap-1 font-semibold"><ArrowLeft className="w-3 h-3" /> Edit Details</button>
-        <h3 className="text-lg font-bold text-[#003368] mb-1">Verify your number</h3>
-        <p className="text-xs text-slate-500 mb-6">We've sent a 4-digit code to {formData.phone} via WhatsApp.</p>
+        <button type="button" onClick={() => setIsOtpStep(false)} className="text-[10px] text-slate-500 mb-6 flex items-center gap-1 font-semibold"><ArrowLeft className="w-3 h-3" /> {otpEditLabel}</button>
+        <h3 className="text-lg font-bold text-[#003368] mb-1">{otpHeading}</h3>
+        <p className="text-xs text-slate-500 mb-6">{otpSubtitle.replace('{phone}', formData.phone)}</p>
         <form onSubmit={handleOtpSubmit} className="space-y-6">
           <input
             type="text"
@@ -228,7 +282,7 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
           />
           {error && <p className="text-xs text-red-500 text-center">{error}</p>}
           <button type="submit" disabled={isLoading || otp.length < 4} className="w-full bg-[#00DF83] text-[#003368] font-bold py-4 rounded-xl shadow-lg shadow-[#00DF83]/20 disabled:opacity-50">
-            {isLoading ? <Loader2 className="animate-spin mx-auto" /> : "Verify & Complete →"}
+            {isLoading ? <Loader2 className="animate-spin mx-auto" /> : otpVerifyText}
           </button>
         </form>
       </div>
@@ -239,49 +293,43 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass" }: Registratio
     <form onSubmit={handleInitialSubmit} className="space-y-4">
       <div className="grid grid-cols-1 gap-4">
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><User className="w-3 h-3" /> Full Name</label>
-          <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder="Your name" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><User className="w-3 h-3" /> {labelName}</label>
+          <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder={phName} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Mail className="w-3 h-3" /> Email</label>
-          <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder="Email address" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Mail className="w-3 h-3" /> {labelEmail}</label>
+          <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder={phEmail} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Phone className="w-3 h-3" /> WhatsApp Number</label>
-          <input type="tel" name="phone" required maxLength={10} value={formData.phone} onChange={handleInputChange} placeholder="10-digit number" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Phone className="w-3 h-3" /> {labelPhone}</label>
+          <input type="tel" name="phone" required maxLength={10} value={formData.phone} onChange={handleInputChange} placeholder={phPhone} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Briefcase className="w-3 h-3" /> Status</label>
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Briefcase className="w-3 h-3" /> {labelStatus}</label>
             <select name="status" required value={formData.status} onChange={handleInputChange} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50 appearance-none">
-              <option value="">Select</option>
-              <option value="Student">Student</option>
-              <option value="Working professional">Working professional</option>
-              <option value="Career switcher">Career switcher</option>
+              <option value="">{phSelect}</option>
+              {statusOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
             </select>
           </div>
           <div>
-            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> City</label>
-            <input type="text" name="city" required value={formData.city} onChange={handleInputChange} placeholder="City" className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+            <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {labelCity}</label>
+            <input type="text" name="city" required value={formData.city} onChange={handleInputChange} placeholder={phCity} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
           </div>
         </div>
         <div>
-          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Megaphone className="w-3 h-3" /> How did you hear about this masterclass?</label>
+          <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Megaphone className="w-3 h-3" /> {labelReferral}</label>
           <select name="referralSource" required value={formData.referralSource} onChange={handleInputChange} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50 appearance-none">
-            <option value="">Select</option>
-            <option value="Counselor">Counselor</option>
-            <option value="Social Media">Social Media</option>
-            <option value="Email Invite">Email Invite</option>
-            <option value="WhatsApp Invite">WhatsApp Invite</option>
-            <option value="Word of Mouth">Word of Mouth</option>
+            <option value="">{phSelect}</option>
+            {referralOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
           </select>
         </div>
       </div>
       {error && <p className="text-xs text-red-500">{error}</p>}
       <button type="submit" disabled={isLoading} className="w-full bg-[#00DF83] text-[#003368] font-bold py-4 rounded-xl shadow-lg shadow-[#00DF83]/20 mt-4 group">
-        {isLoading ? <Loader2 className="animate-spin mx-auto" /> : <>Register Now <span className="inline-block group-hover:translate-x-1 transition-transform">→</span></>}
+        {isLoading ? <Loader2 className="animate-spin mx-auto" /> : <>{submitText} <span className="inline-block group-hover:translate-x-1 transition-transform">→</span></>}
       </button>
-      <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest mt-4">Instant OTP via WhatsApp</p>
+      <p className="text-center text-[10px] text-gray-400 uppercase tracking-widest mt-4">{otpFooterText}</p>
     </form>
   );
 }

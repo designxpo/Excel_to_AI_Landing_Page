@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/zoom';
 import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
-import { findRegistrationByEmailOrPhone } from '@/lib/db';
+import { findRegistrationByEmailOrPhone, getWebinarConfig } from '@/lib/db';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -89,7 +89,7 @@ async function pushToGoogleSheets(body: any, cleanPhone: string, otpStatus: stri
   }
 }
 
-async function sendWhatsAppOtp(phone: string, otp: string): Promise<boolean> {
+async function sendWhatsAppOtp(phone: string, otp: string, templateName: string): Promise<boolean> {
   const waAccessToken = process.env.META_WA_ACCESS_TOKEN;
   const waPhoneId = process.env.META_WA_PHONE_NUMBER_ID;
   if (!waAccessToken || !waPhoneId) return false;
@@ -103,7 +103,7 @@ async function sendWhatsAppOtp(phone: string, otp: string): Promise<boolean> {
         to: `91${phone}`,
         type: 'template',
         template: {
-          name: 'form_otp',
+          name: templateName,
           language: { code: 'en_US' },
           components: [{ type: 'body', parameters: [{ type: 'text', text: otp }] }],
         },
@@ -125,9 +125,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 0. Block duplicates — if this email or phone already completed registration,
-    // don't burn another OTP / Zoom slot / LSQ lead.
-    const existing = await findRegistrationByEmailOrPhone(email, phone);
+    // 0. Block duplicates + load webinar config (overrides for Zoom / LSQ /
+    // WhatsApp template come from the admin-editable DB; env values are the
+    // legacy fallback).
+    const [existing, config] = await Promise.all([
+      findRegistrationByEmailOrPhone(email, phone),
+      getWebinarConfig().catch(() => null),
+    ]);
     if (existing) {
       return NextResponse.json(
         {
@@ -151,14 +155,17 @@ export async function POST(req: NextRequest) {
     const lastName = nameParts.slice(1).join(' ');
 
     // 2. Run WhatsApp + Zoom registration in parallel
+    const whatsappTemplate = config?.whatsappTemplateName?.trim() || 'form_otp';
+    const zoomWebinarOverride = config?.zoomWebinarId?.trim() || null;
     const [waSuccess, zoomResult]: [boolean, ZoomRegistrationResult] = await Promise.all([
-      sendWhatsAppOtp(phone, otp),
+      sendWhatsAppOtp(phone, otp, whatsappTemplate),
       registerWebinarParticipant({
         email,
         firstName,
         lastName,
         phone,
         city,
+        webinarId: zoomWebinarOverride,
       }),
     ]);
 
@@ -200,7 +207,7 @@ export async function POST(req: NextRequest) {
       { Attribute: 'EmailAddress', Value: email },
       { Attribute: 'Phone', Value: phone },
       { Attribute: 'mx_City_name', Value: city },
-      { Attribute: 'Source', Value: typeFilter || 'PPC_Masterclass' },
+      { Attribute: 'Source', Value: typeFilter || config?.lsqSourceName?.trim() || 'PPC_Masterclass' },
       { Attribute: 'mx_GCLID', Value: body.gclid || '' },
       { Attribute: 'mx_OTP_Status', Value: otpStatus },
       { Attribute: notesFieldName, Value: notesBlob },
@@ -239,7 +246,7 @@ export async function POST(req: NextRequest) {
           externalId: email,
         },
         customData: {
-          source: typeFilter || 'PPC_Masterclass',
+          source: typeFilter || config?.lsqSourceName?.trim() || 'PPC_Masterclass',
           gclid: body.gclid || undefined,
         },
       }).then(result => {

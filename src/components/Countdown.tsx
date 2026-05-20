@@ -2,9 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-// Actual webinar moment: 7 June 2026, 11:00 AM IST = 05:30 UTC.
-// Until then, show a rolling 36-hour urgency timer that resets each cycle.
-const WEBINAR_MS = new Date('2026-06-07T05:30:00.000Z').getTime();
+// Fallback webinar moment if no prop is passed: 7 June 2026, 11:00 AM IST (= 05:30 UTC).
+const FALLBACK_WEBINAR_MS = new Date('2026-06-07T05:30:00.000Z').getTime();
 const CYCLE_MS = 36 * 60 * 60 * 1000;
 
 function pad(n: number) {
@@ -13,8 +12,8 @@ function pad(n: number) {
 
 type Tick = { live: boolean; hours: number; mins: number; secs: number };
 
-function compute(now: number): Tick {
-  if (now >= WEBINAR_MS) return { live: true, hours: 0, mins: 0, secs: 0 };
+function compute(now: number, webinarMs: number): Tick {
+  if (now >= webinarMs) return { live: true, hours: 0, mins: 0, secs: 0 };
   // Position within the global 36h cycle, anchored to the Unix epoch so all
   // visitors see the same value at the same wall-clock moment.
   const remainingMs = CYCLE_MS - (now % CYCLE_MS);
@@ -26,14 +25,27 @@ function compute(now: number): Tick {
   };
 }
 
-export function Countdown({ variant = 'dark' }: { variant?: 'dark' | 'light' }) {
+export function Countdown({
+  variant = 'dark',
+  webinarIso,
+}: {
+  variant?: 'dark' | 'light';
+  /** ISO-8601 timestamp for the webinar. Falls back to the original Jun 7 2026 anchor. */
+  webinarIso?: string | null;
+}) {
+  const webinarMs = (() => {
+    if (!webinarIso) return FALLBACK_WEBINAR_MS;
+    const parsed = new Date(webinarIso).getTime();
+    return Number.isFinite(parsed) ? parsed : FALLBACK_WEBINAR_MS;
+  })();
+
   const [tick, setTick] = useState<Tick | null>(null);
 
   useEffect(() => {
-    setTick(compute(Date.now()));
-    const id = setInterval(() => setTick(compute(Date.now())), 1000);
+    setTick(compute(Date.now(), webinarMs));
+    const id = setInterval(() => setTick(compute(Date.now(), webinarMs)), 1000);
     return () => clearInterval(id);
-  }, []);
+  }, [webinarMs]);
 
   if (!tick) {
     // SSR / first paint — render zeros so layout doesn't shift on hydration.

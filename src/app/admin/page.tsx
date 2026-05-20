@@ -6,11 +6,74 @@ import { useRouter } from "next/navigation";
 import Image from "next/image";
 
 type FaqItem = { id: string; q: string; a: string; order: number };
+type FeatureItem = { id: string; icon: string | null; title: string; description: string; accent: string | null; sortOrder: number };
+type AgendaItem = { id: string; title: string; description: string; highlight: boolean; sortOrder: number };
+type WebinarConfig = {
+  speakerName: string; speakerTitle: string; speakerImage: string; speakerBio: string;
+  webinarDateLabel: string | null; webinarTimeLabel: string | null; webinarDatetimeUtc: string | null;
+  durationLabel: string | null; metaTitle: string | null; metaDescription: string | null; ogImageUrl: string | null;
+  formHeading: string | null; formSubheading: string | null;
+  stickyEyebrow: string | null; stickyMain: string | null;
+  ctaButtonText: string | null; navCtaText: string | null; logoPath: string | null;
+  zoomWebinarId: string | null; lsqSourceName: string | null; whatsappTemplateName: string | null;
+  heroStat1Value: string | null; heroStat1Label: string | null;
+  heroStat2Value: string | null; heroStat2Label: string | null;
+  heroStat3Value: string | null; heroStat3Label: string | null;
+  footerText: string | null;
+  // Phase 2
+  heroEyebrowPill: string | null; heroH1Markup: string | null; heroSubtitle: string | null;
+  countdownLabel: string | null; urgencyBadgeText: string | null; saveSpotCtaText: string | null;
+  formPillDateLabel: string | null; formPillSeatsLabel: string | null; formOtpFooterLabel: string | null;
+  formBottomStat1Value: string | null; formBottomStat1Label: string | null;
+  formBottomStat2Value: string | null; formBottomStat2Label: string | null;
+  formBottomStat3Value: string | null; formBottomStat3Label: string | null;
+  statsDisclaimer: string | null; partnershipCaption: string | null; partnershipImagePath: string | null;
+  definitionEyebrow: string | null; definitionSectionTitle: string | null; definitionIntro: string | null;
+  definitionATitle: string | null; definitionABullets: string | null;
+  definitionBTitle: string | null; definitionBBullets: string | null;
+  featuresSectionTitle: string | null; featuresSectionSubtitle: string | null; featuresImagePath: string | null;
+  sessionInsidePill: string | null;
+  agendaSectionTitle: string | null; agendaSectionSubtitle: string | null;
+  sessionBadge1: string | null; sessionBadge2: string | null; sessionBadge3: string | null;
+  sessionObjEyebrow: string | null; sessionObjTitle: string | null;
+  sessionObj1Num: string | null; sessionObj1Title: string | null; sessionObj1Desc: string | null;
+  sessionObj2Num: string | null; sessionObj2Title: string | null; sessionObj2Desc: string | null;
+  sessionWalkthroughEyebrow: string | null; sessionWalkthroughTitle: string | null;
+  facultyIntro: string | null; facultyHeadingPrefix: string | null;
+  faqSectionTitle: string | null;
+  // Phase 3
+  footerLink1Label: string | null; footerLink1Url: string | null;
+  footerLink2Label: string | null; footerLink2Url: string | null;
+  footerLink3Label: string | null; footerLink3Url: string | null;
+  footerLink4Label: string | null; footerLink4Url: string | null;
+  formLabelName: string | null; formLabelEmail: string | null; formLabelPhone: string | null;
+  formLabelStatus: string | null; formLabelCity: string | null; formLabelReferral: string | null;
+  formPlaceholderName: string | null; formPlaceholderEmail: string | null; formPlaceholderPhone: string | null;
+  formPlaceholderSelect: string | null; formPlaceholderCity: string | null;
+  formStatusOptions: string | null; formReferralOptions: string | null;
+  otpHeading: string | null; otpSubtitleTemplate: string | null;
+  otpEditDetailsLabel: string | null; otpVerifyButtonText: string | null;
+  successHeading: string | null; successBody: string | null;
+  facultyChip1: string | null; facultyChip2: string | null; facultyChip3: string | null;
+  partnershipImageAlt: string | null;
+  // Phase 4 (ThankYouPage)
+  thankyouHeading: string | null; thankyouSubcopy: string | null; thankyouConfirmationTemplate: string | null;
+  thankyouWebinarTitlePersonal: string | null; thankyouWebinarTitleDefault: string | null;
+  thankyouWebinarBodyPersonal: string | null; thankyouWebinarBodyDefault: string | null;
+  thankyouWebinarCtaPersonal: string | null; thankyouWebinarCtaDefault: string | null;
+  thankyouPhoneTitle: string | null; thankyouPhoneBody: string | null; thankyouPhoneCta: string | null; thankyouPhoneNumber: string | null;
+  thankyouWhatsappTitle: string | null; thankyouWhatsappBody: string | null; thankyouWhatsappCta: string | null;
+  thankyouWhatsappNumber: string | null; thankyouWhatsappMessage: string | null;
+  thankyouFooterText: string | null;
+  genericBrochureUrl: string | null; genericBrochureCta: string | null;
+};
+
+type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs';
 
 export default function AdminPortal() {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<"settings" | "registrations" | "faqs">("settings");
-  
+  const [activeTab, setActiveTab] = useState<AdminTab>("settings");
+
   // Settings State
   const [settings, setSettings] = useState({
     speakerName: "",
@@ -31,6 +94,24 @@ export default function AdminPortal() {
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(false);
   const [isSavingFaqs, setIsSavingFaqs] = useState(false);
   const [faqMessage, setFaqMessage] = useState("");
+
+  // Webinar Config State
+  const [webinar, setWebinar] = useState<Partial<WebinarConfig>>({});
+  const [isLoadingWebinar, setIsLoadingWebinar] = useState(false);
+  const [isSavingWebinar, setIsSavingWebinar] = useState(false);
+  const [webinarMessage, setWebinarMessage] = useState("");
+
+  // Features State
+  const [features, setFeatures] = useState<FeatureItem[]>([]);
+  const [isLoadingFeatures, setIsLoadingFeatures] = useState(false);
+  const [isSavingFeatures, setIsSavingFeatures] = useState(false);
+  const [featureMessage, setFeatureMessage] = useState("");
+
+  // Agenda State
+  const [agenda, setAgenda] = useState<AgendaItem[]>([]);
+  const [isLoadingAgenda, setIsLoadingAgenda] = useState(false);
+  const [isSavingAgenda, setIsSavingAgenda] = useState(false);
+  const [agendaMessage, setAgendaMessage] = useState("");
 
   useEffect(() => {
     // Fetch Settings
@@ -61,14 +142,186 @@ export default function AdminPortal() {
       });
   };
 
+  const loadWebinar = () => {
+    setIsLoadingWebinar(true);
+    fetch('/api/webinar')
+      .then(res => res.json())
+      .then(data => {
+        setWebinar(data || {});
+        setIsLoadingWebinar(false);
+      })
+      .catch(() => {
+        setWebinarMessage('Failed to load webinar config.');
+        setIsLoadingWebinar(false);
+      });
+  };
+
+  const loadFeatures = () => {
+    setIsLoadingFeatures(true);
+    fetch('/api/features')
+      .then(res => res.json())
+      .then((data: FeatureItem[]) => {
+        setFeatures(Array.isArray(data) ? data : []);
+        setIsLoadingFeatures(false);
+      })
+      .catch(() => {
+        setFeatureMessage('Failed to load features.');
+        setIsLoadingFeatures(false);
+      });
+  };
+
+  const loadAgenda = () => {
+    setIsLoadingAgenda(true);
+    fetch('/api/agenda-items')
+      .then(res => res.json())
+      .then((data: AgendaItem[]) => {
+        setAgenda(Array.isArray(data) ? data : []);
+        setIsLoadingAgenda(false);
+      })
+      .catch(() => {
+        setAgendaMessage('Failed to load agenda.');
+        setIsLoadingAgenda(false);
+      });
+  };
+
   useEffect(() => {
-    if (activeTab === "registrations") {
-      loadRegistrations();
-    }
-    if (activeTab === "faqs") {
-      loadFaqs();
-    }
+    if (activeTab === "registrations") loadRegistrations();
+    if (activeTab === "faqs") loadFaqs();
+    if (activeTab === "webinar") loadWebinar();
+    if (activeTab === "features") loadFeatures();
+    if (activeTab === "agenda") loadAgenda();
   }, [activeTab]);
+
+  // ─── Webinar config handlers ─────────────────────────────────────────────
+  const updateWebinarField = <K extends keyof WebinarConfig>(field: K, value: WebinarConfig[K]) => {
+    setWebinar(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleWebinarSave = async () => {
+    setIsSavingWebinar(true);
+    setWebinarMessage("");
+    try {
+      const res = await fetch('/api/webinar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(webinar),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setWebinar(data.config || {});
+        setWebinarMessage('Webinar config saved successfully!');
+      } else {
+        setWebinarMessage(data.error || 'Failed to save webinar config.');
+      }
+    } catch {
+      setWebinarMessage('Error saving webinar config.');
+    }
+    setIsSavingWebinar(false);
+    setTimeout(() => setWebinarMessage(""), 3000);
+  };
+
+  // ─── Feature handlers (FAQ-style) ────────────────────────────────────────
+  const handleFeatureChange = (idx: number, field: 'title' | 'description' | 'icon' | 'accent', value: string) => {
+    setFeatures(prev => prev.map((f, i) => (i === idx ? { ...f, [field]: value || null } : f)));
+  };
+  const handleFeatureAdd = () => {
+    setFeatures(prev => [
+      ...prev,
+      { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, icon: '', title: '', description: '', accent: null, sortOrder: prev.length },
+    ]);
+  };
+  const handleFeatureDelete = (idx: number) => setFeatures(prev => prev.filter((_, i) => i !== idx));
+  const handleFeatureMove = (idx: number, direction: -1 | 1) => {
+    setFeatures(prev => {
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next.map((f, i) => ({ ...f, sortOrder: i }));
+    });
+  };
+  const handleFeaturesSave = async () => {
+    const invalid = features.find(f => !f.title.trim() || !f.description.trim());
+    if (invalid) {
+      setFeatureMessage('Every feature must have a title and description.');
+      setTimeout(() => setFeatureMessage(""), 3000);
+      return;
+    }
+    setIsSavingFeatures(true);
+    setFeatureMessage("");
+    try {
+      const payload = features.map(({ id, icon, title, description, accent }) => ({ id, icon, title, description, accent }));
+      const res = await fetch('/api/features', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFeatures(data.features);
+        setFeatureMessage('Features saved successfully!');
+      } else {
+        setFeatureMessage(data.error || 'Failed to save features.');
+      }
+    } catch {
+      setFeatureMessage('Error saving features.');
+    }
+    setIsSavingFeatures(false);
+    setTimeout(() => setFeatureMessage(""), 3000);
+  };
+
+  // ─── Agenda handlers (FAQ-style + highlight toggle) ──────────────────────
+  const handleAgendaChange = (idx: number, field: 'title' | 'description', value: string) => {
+    setAgenda(prev => prev.map((a, i) => (i === idx ? { ...a, [field]: value } : a)));
+  };
+  const handleAgendaToggleHighlight = (idx: number) => {
+    setAgenda(prev => prev.map((a, i) => (i === idx ? { ...a, highlight: !a.highlight } : a)));
+  };
+  const handleAgendaAdd = () => {
+    setAgenda(prev => [
+      ...prev,
+      { id: `new-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, title: '', description: '', highlight: false, sortOrder: prev.length },
+    ]);
+  };
+  const handleAgendaDelete = (idx: number) => setAgenda(prev => prev.filter((_, i) => i !== idx));
+  const handleAgendaMove = (idx: number, direction: -1 | 1) => {
+    setAgenda(prev => {
+      const target = idx + direction;
+      if (target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next.map((a, i) => ({ ...a, sortOrder: i }));
+    });
+  };
+  const handleAgendaSave = async () => {
+    const invalid = agenda.find(a => !a.title.trim() || !a.description.trim());
+    if (invalid) {
+      setAgendaMessage('Every agenda item must have a title and description.');
+      setTimeout(() => setAgendaMessage(""), 3000);
+      return;
+    }
+    setIsSavingAgenda(true);
+    setAgendaMessage("");
+    try {
+      const payload = agenda.map(({ id, title, description, highlight }) => ({ id, title, description, highlight }));
+      const res = await fetch('/api/agenda-items', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setAgenda(data.agendaItems);
+        setAgendaMessage('Agenda saved successfully!');
+      } else {
+        setAgendaMessage(data.error || 'Failed to save agenda.');
+      }
+    } catch {
+      setAgendaMessage('Error saving agenda.');
+    }
+    setIsSavingAgenda(false);
+    setTimeout(() => setAgendaMessage(""), 3000);
+  };
 
   const handleFaqChange = (idx: number, field: 'q' | 'a', value: string) => {
     setFaqs(prev => prev.map((f, i) => (i === idx ? { ...f, [field]: value } : f)));
@@ -188,25 +441,23 @@ export default function AdminPortal() {
         <div className="border-b border-slate-200 bg-slate-100/50 p-6 flex items-center justify-between">
           <h1 className="text-2xl font-bold text-[#003368]">Admin Portal</h1>
           <div className="flex items-center gap-4">
-            <div className="flex gap-2 bg-slate-200 p-1 rounded-lg">
-              <button 
-                onClick={() => setActiveTab("settings")}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'settings' ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Landing Page Settings
-              </button>
-              <button
-                onClick={() => setActiveTab("registrations")}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'registrations' ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Registrations Database
-              </button>
-              <button
-                onClick={() => setActiveTab("faqs")}
-                className={`px-4 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === 'faqs' ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
-              >
-                Common Questions
-              </button>
+            <div className="flex gap-1 bg-slate-200 p-1 rounded-lg flex-wrap">
+              {([
+                { key: 'settings',      label: 'Speaker' },
+                { key: 'webinar',       label: 'Webinar' },
+                { key: 'features',      label: 'Features' },
+                { key: 'agenda',        label: 'Agenda' },
+                { key: 'faqs',          label: 'FAQs' },
+                { key: 'registrations', label: 'Registrations' },
+              ] as { key: AdminTab; label: string }[]).map(tab => (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key)}
+                  className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === tab.key ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
             <button 
               onClick={handleLogout}
@@ -447,8 +698,451 @@ export default function AdminPortal() {
             </div>
           )}
 
+          {/* Webinar Tab */}
+          {activeTab === "webinar" && (
+            <div className="max-w-3xl">
+              <div className="mb-6">
+                <h2 className="text-lg font-bold text-[#003368]">Webinar Details</h2>
+                <p className="text-sm text-slate-500 mt-1">All fields are editable. Leave blank to keep the original landing-page default.</p>
+              </div>
+
+              {isLoadingWebinar ? (
+                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#00DF83] animate-spin" /></div>
+              ) : (
+                <div className="space-y-8">
+                  <WebinarSection title="Date & Time">
+                    <Field label="Date label (display)"  value={webinar.webinarDateLabel ?? ''}  onChange={v => updateWebinarField('webinarDateLabel', v)}  placeholder="Sat, 7 June 2026" />
+                    <Field label="Time label (display)"  value={webinar.webinarTimeLabel ?? ''}  onChange={v => updateWebinarField('webinarTimeLabel', v)}  placeholder="11:00 AM IST" />
+                    <Field label="Datetime UTC (for countdown)" value={webinar.webinarDatetimeUtc ?? ''} onChange={v => updateWebinarField('webinarDatetimeUtc', v)} placeholder="2026-06-07T05:30:00+00:00" hint="ISO 8601 in UTC. e.g. 11 AM IST = 05:30 UTC." />
+                    <Field label="Duration label" value={webinar.durationLabel ?? ''} onChange={v => updateWebinarField('durationLabel', v)} placeholder="90 Min" />
+                  </WebinarSection>
+
+                  <WebinarSection title="SEO / Social">
+                    <Field label="Meta title (browser tab + SEO)" value={webinar.metaTitle ?? ''} onChange={v => updateWebinarField('metaTitle', v)} />
+                    <TextField label="Meta description" value={webinar.metaDescription ?? ''} onChange={v => updateWebinarField('metaDescription', v)} rows={2} />
+                    <Field label="OG image URL (social shares)" value={webinar.ogImageUrl ?? ''} onChange={v => updateWebinarField('ogImageUrl', v)} placeholder="https://..." />
+                  </WebinarSection>
+
+                  <WebinarSection title="Form Card">
+                    <Field label="Form heading" value={webinar.formHeading ?? ''} onChange={v => updateWebinarField('formHeading', v)} placeholder="Register for the Free Masterclass" />
+                    <Field label="Form subheading" value={webinar.formSubheading ?? ''} onChange={v => updateWebinarField('formSubheading', v)} />
+                    <Field label="CTA button text" value={webinar.ctaButtonText ?? ''} onChange={v => updateWebinarField('ctaButtonText', v)} placeholder="Register Now" />
+                    <Field label="Navbar CTA text" value={webinar.navCtaText ?? ''} onChange={v => updateWebinarField('navCtaText', v)} placeholder="Book Free Session" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Sticky Bottom CTA">
+                    <Field label="Eyebrow (desktop)" value={webinar.stickyEyebrow ?? ''} onChange={v => updateWebinarField('stickyEyebrow', v)} placeholder="Sat, 7 June 2026 · 11:00 AM IST · Live Online" />
+                    <TextField label="Main text" value={webinar.stickyMain ?? ''} onChange={v => updateWebinarField('stickyMain', v)} rows={2} />
+                  </WebinarSection>
+
+                  <WebinarSection title="Hero Stats (3 tiles)">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Stat 1 value" value={webinar.heroStat1Value ?? ''} onChange={v => updateWebinarField('heroStat1Value', v)} placeholder="50K+" />
+                      <Field label="Stat 1 label" value={webinar.heroStat1Label ?? ''} onChange={v => updateWebinarField('heroStat1Label', v)} placeholder="Students Trained" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Stat 2 value" value={webinar.heroStat2Value ?? ''} onChange={v => updateWebinarField('heroStat2Value', v)} placeholder="4.9★ (★ renders gold)" />
+                      <Field label="Stat 2 label" value={webinar.heroStat2Label ?? ''} onChange={v => updateWebinarField('heroStat2Label', v)} placeholder="Average Rating" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Stat 3 value" value={webinar.heroStat3Value ?? ''} onChange={v => updateWebinarField('heroStat3Value', v)} placeholder="100%" />
+                      <Field label="Stat 3 label" value={webinar.heroStat3Label ?? ''} onChange={v => updateWebinarField('heroStat3Label', v)} placeholder="Live Training" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Branding">
+                    <Field label="Logo path (navbar + footer)" value={webinar.logoPath ?? ''} onChange={v => updateWebinarField('logoPath', v)} placeholder="/brand/ALabs_Masterclass.svg" />
+                    <Field label="Footer text" value={webinar.footerText ?? ''} onChange={v => updateWebinarField('footerText', v)} placeholder="© {YEAR} AnalytixLabs India..." hint="{YEAR} gets replaced with the current year." />
+                  </WebinarSection>
+
+                  <WebinarSection title="Integrations (rare — usually only change for a new webinar topic)">
+                    <Field label="Zoom Webinar ID" value={webinar.zoomWebinarId ?? ''} onChange={v => updateWebinarField('zoomWebinarId', v)} placeholder="82257523823" hint="9–12 digit numeric ID. Falls back to ZOOM_WEBINAR_ID env var if blank." />
+                    <Field label="LSQ Source name" value={webinar.lsqSourceName ?? ''} onChange={v => updateWebinarField('lsqSourceName', v)} placeholder="PPC_Masterclass" />
+                    <Field label="WhatsApp template name" value={webinar.whatsappTemplateName ?? ''} onChange={v => updateWebinarField('whatsappTemplateName', v)} placeholder="form_otp" hint="Must be an approved Meta WA template." />
+                  </WebinarSection>
+
+                  {/* ─── Phase 2 sections ──────────────────────────────────── */}
+
+                  <WebinarSection title="Hero — Headline & Pills">
+                    <Field label="Eyebrow pill (above headline)" value={webinar.heroEyebrowPill ?? ''} onChange={v => updateWebinarField('heroEyebrowPill', v)} placeholder="🚀 Free 90-Minute Live Masterclass • Beginner Friendly" />
+                    <TextField label="H1 headline (use *xxx* for green emphasis, line breaks supported)" value={webinar.heroH1Markup ?? ''} onChange={v => updateWebinarField('heroH1Markup', v)} rows={3} />
+                    <TextField label="Subtitle (under headline)" value={webinar.heroSubtitle ?? ''} onChange={v => updateWebinarField('heroSubtitle', v)} rows={3} />
+                    <Field label="Countdown label" value={webinar.countdownLabel ?? ''} onChange={v => updateWebinarField('countdownLabel', v)} placeholder="Registrations close in" />
+                    <Field label="Urgency badge (next to date)" value={webinar.urgencyBadgeText ?? ''} onChange={v => updateWebinarField('urgencyBadgeText', v)} placeholder="Filling Fast" />
+                    <Field label='"Save my spot" CTA text (after agenda)' value={webinar.saveSpotCtaText ?? ''} onChange={v => updateWebinarField('saveSpotCtaText', v)} placeholder="Save My Spot for the Live Session" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Form Card — Pills & Bottom Stats">
+                    <Field label="Form date pill (abbreviated)" value={webinar.formPillDateLabel ?? ''} onChange={v => updateWebinarField('formPillDateLabel', v)} placeholder="Sat, 7 June · 11 AM IST" />
+                    <Field label="Form seats pill" value={webinar.formPillSeatsLabel ?? ''} onChange={v => updateWebinarField('formPillSeatsLabel', v)} placeholder="Limited Seats" />
+                    <Field label="OTP footer label" value={webinar.formOtpFooterLabel ?? ''} onChange={v => updateWebinarField('formOtpFooterLabel', v)} placeholder="Instant OTP via WhatsApp" hint="Currently hardcoded in form; editing won't apply until form refactor." />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Bottom stat 1 value" value={webinar.formBottomStat1Value ?? ''} onChange={v => updateWebinarField('formBottomStat1Value', v)} placeholder="4.9/5" />
+                      <Field label="Bottom stat 1 label" value={webinar.formBottomStat1Label ?? ''} onChange={v => updateWebinarField('formBottomStat1Label', v)} placeholder="Reviews" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Bottom stat 2 value" value={webinar.formBottomStat2Value ?? ''} onChange={v => updateWebinarField('formBottomStat2Value', v)} placeholder="50,000+" />
+                      <Field label="Bottom stat 2 label" value={webinar.formBottomStat2Label ?? ''} onChange={v => updateWebinarField('formBottomStat2Label', v)} placeholder="Alumni" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Bottom stat 3 value" value={webinar.formBottomStat3Value ?? ''} onChange={v => updateWebinarField('formBottomStat3Value', v)} placeholder="90 Min" />
+                      <Field label="Bottom stat 3 label" value={webinar.formBottomStat3Label ?? ''} onChange={v => updateWebinarField('formBottomStat3Label', v)} placeholder="Live Session" />
+                    </div>
+                    <TextField label="Stats disclaimer (small italic line)" value={webinar.statsDisclaimer ?? ''} onChange={v => updateWebinarField('statsDisclaimer', v)} rows={2} />
+                    <Field label="Partnership caption (above logo strip)" value={webinar.partnershipCaption ?? ''} onChange={v => updateWebinarField('partnershipCaption', v)} placeholder="In Partnership With" />
+                    <Field label="Partnership logo image path" value={webinar.partnershipImagePath ?? ''} onChange={v => updateWebinarField('partnershipImagePath', v)} placeholder="/brand/Final_logo.png" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Definition Section (Data Analyst vs Data Scientist)">
+                    <Field label="Eyebrow" value={webinar.definitionEyebrow ?? ''} onChange={v => updateWebinarField('definitionEyebrow', v)} placeholder="Quick Primer" />
+                    <Field label="Section title (use *xxx* for green emphasis)" value={webinar.definitionSectionTitle ?? ''} onChange={v => updateWebinarField('definitionSectionTitle', v)} />
+                    <TextField label="Intro paragraph (use **xxx** for bold)" value={webinar.definitionIntro ?? ''} onChange={v => updateWebinarField('definitionIntro', v)} rows={4} />
+                    <Field label="Card A title (left)" value={webinar.definitionATitle ?? ''} onChange={v => updateWebinarField('definitionATitle', v)} placeholder="Data Analyst" />
+                    <TextField label="Card A bullets (one per line)" value={webinar.definitionABullets ?? ''} onChange={v => updateWebinarField('definitionABullets', v)} rows={5} />
+                    <Field label="Card B title (right, dark)" value={webinar.definitionBTitle ?? ''} onChange={v => updateWebinarField('definitionBTitle', v)} placeholder="Data Scientist" />
+                    <TextField label="Card B bullets (one per line)" value={webinar.definitionBBullets ?? ''} onChange={v => updateWebinarField('definitionBBullets', v)} rows={5} />
+                  </WebinarSection>
+
+                  <WebinarSection title="Features Section">
+                    <Field label="Section title (use *xxx* for green emphasis)" value={webinar.featuresSectionTitle ?? ''} onChange={v => updateWebinarField('featuresSectionTitle', v)} placeholder="What You'll *Master*" />
+                    <TextField label="Section subtitle" value={webinar.featuresSectionSubtitle ?? ''} onChange={v => updateWebinarField('featuresSectionSubtitle', v)} rows={2} />
+                    <Field label="Hero image path" value={webinar.featuresImagePath ?? ''} onChange={v => updateWebinarField('featuresImagePath', v)} placeholder="/brand/landingpageelement.png" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Agenda Section (Inside the Session)">
+                    <Field label="Inside-the-session pill" value={webinar.sessionInsidePill ?? ''} onChange={v => updateWebinarField('sessionInsidePill', v)} placeholder="Inside the Session" />
+                    <TextField label="Section title (use *xxx* for green emphasis)" value={webinar.agendaSectionTitle ?? ''} onChange={v => updateWebinarField('agendaSectionTitle', v)} rows={2} />
+                    <TextField label="Section subtitle" value={webinar.agendaSectionSubtitle ?? ''} onChange={v => updateWebinarField('agendaSectionSubtitle', v)} rows={3} />
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Badge 1" value={webinar.sessionBadge1 ?? ''} onChange={v => updateWebinarField('sessionBadge1', v)} placeholder="90 minutes" />
+                      <Field label="Badge 2" value={webinar.sessionBadge2 ?? ''} onChange={v => updateWebinarField('sessionBadge2', v)} placeholder="Live on Zoom Webinar" />
+                      <Field label="Badge 3" value={webinar.sessionBadge3 ?? ''} onChange={v => updateWebinarField('sessionBadge3', v)} placeholder="Freshers & working professionals" />
+                    </div>
+                    <Field label="Objectives eyebrow" value={webinar.sessionObjEyebrow ?? ''} onChange={v => updateWebinarField('sessionObjEyebrow', v)} placeholder="By the end of this session" />
+                    <Field label="Objectives title" value={webinar.sessionObjTitle ?? ''} onChange={v => updateWebinarField('sessionObjTitle', v)} placeholder="You will clearly understand" />
+                    <div className="grid grid-cols-[60px_1fr] gap-3">
+                      <Field label="Obj 1 #" value={webinar.sessionObj1Num ?? ''} onChange={v => updateWebinarField('sessionObj1Num', v)} placeholder="01" />
+                      <Field label="Obj 1 title" value={webinar.sessionObj1Title ?? ''} onChange={v => updateWebinarField('sessionObj1Title', v)} />
+                    </div>
+                    <TextField label="Obj 1 description" value={webinar.sessionObj1Desc ?? ''} onChange={v => updateWebinarField('sessionObj1Desc', v)} rows={2} />
+                    <div className="grid grid-cols-[60px_1fr] gap-3">
+                      <Field label="Obj 2 #" value={webinar.sessionObj2Num ?? ''} onChange={v => updateWebinarField('sessionObj2Num', v)} placeholder="02" />
+                      <Field label="Obj 2 title" value={webinar.sessionObj2Title ?? ''} onChange={v => updateWebinarField('sessionObj2Title', v)} />
+                    </div>
+                    <TextField label="Obj 2 description" value={webinar.sessionObj2Desc ?? ''} onChange={v => updateWebinarField('sessionObj2Desc', v)} rows={2} />
+                    <Field label="Walkthrough eyebrow" value={webinar.sessionWalkthroughEyebrow ?? ''} onChange={v => updateWebinarField('sessionWalkthroughEyebrow', v)} placeholder="What we'll cover" />
+                    <Field label="Walkthrough title" value={webinar.sessionWalkthroughTitle ?? ''} onChange={v => updateWebinarField('sessionWalkthroughTitle', v)} placeholder="The 90-minute walkthrough" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Faculty Section">
+                    <Field label="Pill text (above heading)" value={webinar.facultyIntro ?? ''} onChange={v => updateWebinarField('facultyIntro', v)} placeholder="Live Session" />
+                    <Field label="Heading prefix (before speaker name)" value={webinar.facultyHeadingPrefix ?? ''} onChange={v => updateWebinarField('facultyHeadingPrefix', v)} placeholder="Learn from" hint='Final heading reads: "{prefix} {Speaker Name}".' />
+                  </WebinarSection>
+
+                  <WebinarSection title="FAQ Section">
+                    <Field label="Section title" value={webinar.faqSectionTitle ?? ''} onChange={v => updateWebinarField('faqSectionTitle', v)} placeholder="Common Questions" />
+                  </WebinarSection>
+
+                  {/* ─── Phase 3 sections ──────────────────────────────────── */}
+
+                  <WebinarSection title="Footer Links (4)">
+                    <div className="grid grid-cols-[1fr_2fr] gap-3">
+                      <Field label="Link 1 label" value={webinar.footerLink1Label ?? ''} onChange={v => updateWebinarField('footerLink1Label', v)} placeholder="Privacy" />
+                      <Field label="Link 1 URL"   value={webinar.footerLink1Url   ?? ''} onChange={v => updateWebinarField('footerLink1Url',   v)} placeholder="/privacy or #" />
+                    </div>
+                    <div className="grid grid-cols-[1fr_2fr] gap-3">
+                      <Field label="Link 2 label" value={webinar.footerLink2Label ?? ''} onChange={v => updateWebinarField('footerLink2Label', v)} placeholder="Terms" />
+                      <Field label="Link 2 URL"   value={webinar.footerLink2Url   ?? ''} onChange={v => updateWebinarField('footerLink2Url',   v)} placeholder="/terms or #" />
+                    </div>
+                    <div className="grid grid-cols-[1fr_2fr] gap-3">
+                      <Field label="Link 3 label" value={webinar.footerLink3Label ?? ''} onChange={v => updateWebinarField('footerLink3Label', v)} placeholder="Contact" />
+                      <Field label="Link 3 URL"   value={webinar.footerLink3Url   ?? ''} onChange={v => updateWebinarField('footerLink3Url',   v)} placeholder="/contact or #" />
+                    </div>
+                    <div className="grid grid-cols-[1fr_2fr] gap-3">
+                      <Field label="Link 4 label" value={webinar.footerLink4Label ?? ''} onChange={v => updateWebinarField('footerLink4Label', v)} placeholder="Help" />
+                      <Field label="Link 4 URL"   value={webinar.footerLink4Url   ?? ''} onChange={v => updateWebinarField('footerLink4Url',   v)} placeholder="/help or #" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Form Field Labels">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Full Name label"   value={webinar.formLabelName     ?? ''} onChange={v => updateWebinarField('formLabelName',     v)} placeholder="Full Name" />
+                      <Field label="Email label"       value={webinar.formLabelEmail    ?? ''} onChange={v => updateWebinarField('formLabelEmail',    v)} placeholder="Email" />
+                      <Field label="Phone label"       value={webinar.formLabelPhone    ?? ''} onChange={v => updateWebinarField('formLabelPhone',    v)} placeholder="WhatsApp Number" />
+                      <Field label="Status label"      value={webinar.formLabelStatus   ?? ''} onChange={v => updateWebinarField('formLabelStatus',   v)} placeholder="Status" />
+                      <Field label="City label"        value={webinar.formLabelCity     ?? ''} onChange={v => updateWebinarField('formLabelCity',     v)} placeholder="City" />
+                      <Field label="Referral label"    value={webinar.formLabelReferral ?? ''} onChange={v => updateWebinarField('formLabelReferral', v)} placeholder="How did you hear about this masterclass?" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Form Field Placeholders">
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Name placeholder"   value={webinar.formPlaceholderName   ?? ''} onChange={v => updateWebinarField('formPlaceholderName',   v)} placeholder="Your name" />
+                      <Field label="Email placeholder"  value={webinar.formPlaceholderEmail  ?? ''} onChange={v => updateWebinarField('formPlaceholderEmail',  v)} placeholder="Email address" />
+                      <Field label="Phone placeholder"  value={webinar.formPlaceholderPhone  ?? ''} onChange={v => updateWebinarField('formPlaceholderPhone',  v)} placeholder="10-digit number" />
+                      <Field label="Select placeholder" value={webinar.formPlaceholderSelect ?? ''} onChange={v => updateWebinarField('formPlaceholderSelect', v)} placeholder="Select" hint="Used for both dropdowns' first empty option." />
+                      <Field label="City placeholder"   value={webinar.formPlaceholderCity   ?? ''} onChange={v => updateWebinarField('formPlaceholderCity',   v)} placeholder="City" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Form Dropdown Options">
+                    <TextField label="Status options (one per line)" value={webinar.formStatusOptions ?? ''} onChange={v => updateWebinarField('formStatusOptions', v)} rows={4} />
+                    <TextField label="Referral options (one per line)" value={webinar.formReferralOptions ?? ''} onChange={v => updateWebinarField('formReferralOptions', v)} rows={5} />
+                  </WebinarSection>
+
+                  <WebinarSection title="OTP Verification Screen">
+                    <Field label="Heading" value={webinar.otpHeading ?? ''} onChange={v => updateWebinarField('otpHeading', v)} placeholder="Verify your number" />
+                    <Field label="Subtitle (use {phone} to insert the number)" value={webinar.otpSubtitleTemplate ?? ''} onChange={v => updateWebinarField('otpSubtitleTemplate', v)} placeholder="We've sent a 4-digit code to {phone} via WhatsApp." />
+                    <Field label="'Edit Details' link text" value={webinar.otpEditDetailsLabel ?? ''} onChange={v => updateWebinarField('otpEditDetailsLabel', v)} placeholder="Edit Details" />
+                    <Field label="Verify button text" value={webinar.otpVerifyButtonText ?? ''} onChange={v => updateWebinarField('otpVerifyButtonText', v)} placeholder="Verify & Complete →" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Success Screen (after OTP verified)">
+                    <Field label="Success heading" value={webinar.successHeading ?? ''} onChange={v => updateWebinarField('successHeading', v)} placeholder="You're Registered!" />
+                    <TextField label="Success body" value={webinar.successBody ?? ''} onChange={v => updateWebinarField('successBody', v)} rows={3} />
+                  </WebinarSection>
+
+                  <WebinarSection title="Faculty Chips (3 dots under speaker bio)">
+                    <div className="grid grid-cols-3 gap-3">
+                      <Field label="Chip 1" value={webinar.facultyChip1 ?? ''} onChange={v => updateWebinarField('facultyChip1', v)} placeholder="Live Q&A" />
+                      <Field label="Chip 2" value={webinar.facultyChip2 ?? ''} onChange={v => updateWebinarField('facultyChip2', v)} placeholder="Hands-on Lab" />
+                      <Field label="Chip 3" value={webinar.facultyChip3 ?? ''} onChange={v => updateWebinarField('facultyChip3', v)} placeholder="Certificate" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Accessibility">
+                    <Field label="Partnership image alt text" value={webinar.partnershipImageAlt ?? ''} onChange={v => updateWebinarField('partnershipImageAlt', v)} placeholder="Describe the logo strip for screen readers..." hint="Screen-reader description for the 'In Partnership With' logo image." />
+                  </WebinarSection>
+
+                  {/* ─── Phase 4 sections — ThankYouPage ─────────────────── */}
+
+                  <WebinarSection title="Thank-You Page — Main">
+                    <Field label="Heading" value={webinar.thankyouHeading ?? ''} onChange={v => updateWebinarField('thankyouHeading', v)} placeholder="You're Registered!" />
+                    <TextField label="Sub-copy" value={webinar.thankyouSubcopy ?? ''} onChange={v => updateWebinarField('thankyouSubcopy', v)} rows={3} />
+                    <Field label="Confirmation pill (use {email} for placeholder)" value={webinar.thankyouConfirmationTemplate ?? ''} onChange={v => updateWebinarField('thankyouConfirmationTemplate', v)} placeholder="Confirmation sent to: {email}" />
+                  </WebinarSection>
+
+                  <WebinarSection title="Thank-You Page — Webinar Card (2 variants)">
+                    <p className="text-xs text-slate-500 -mt-1 mb-3">"Personal" variant shows when the user got a personal Zoom URL after OTP. "Default" shows otherwise.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="Title (personal)" value={webinar.thankyouWebinarTitlePersonal ?? ''} onChange={v => updateWebinarField('thankyouWebinarTitlePersonal', v)} placeholder="Your Webinar Access" />
+                      <Field label="Title (default)"  value={webinar.thankyouWebinarTitleDefault  ?? ''} onChange={v => updateWebinarField('thankyouWebinarTitleDefault',  v)} placeholder="Upcoming Webinar" />
+                    </div>
+                    <TextField label="Body (personal)" value={webinar.thankyouWebinarBodyPersonal ?? ''} onChange={v => updateWebinarField('thankyouWebinarBodyPersonal', v)} rows={3} />
+                    <TextField label="Body (default)"  value={webinar.thankyouWebinarBodyDefault  ?? ''} onChange={v => updateWebinarField('thankyouWebinarBodyDefault',  v)} rows={3} />
+                    <div className="grid grid-cols-2 gap-3">
+                      <Field label="CTA (personal)" value={webinar.thankyouWebinarCtaPersonal ?? ''} onChange={v => updateWebinarField('thankyouWebinarCtaPersonal', v)} placeholder="Join Webinar →" />
+                      <Field label="CTA (default)"  value={webinar.thankyouWebinarCtaDefault  ?? ''} onChange={v => updateWebinarField('thankyouWebinarCtaDefault',  v)} placeholder="Save My Spot →" />
+                    </div>
+                  </WebinarSection>
+
+                  <WebinarSection title="Thank-You Page — Phone Card">
+                    <Field label="Title" value={webinar.thankyouPhoneTitle ?? ''} onChange={v => updateWebinarField('thankyouPhoneTitle', v)} placeholder="Need Help? Talk to Us" />
+                    <TextField label="Body" value={webinar.thankyouPhoneBody ?? ''} onChange={v => updateWebinarField('thankyouPhoneBody', v)} rows={2} />
+                    <Field label="CTA text" value={webinar.thankyouPhoneCta ?? ''} onChange={v => updateWebinarField('thankyouPhoneCta', v)} placeholder="Call 95555 25908" />
+                    <Field label="Phone number (digits only, country code first)" value={webinar.thankyouPhoneNumber ?? ''} onChange={v => updateWebinarField('thankyouPhoneNumber', v)} placeholder="919555525908" hint="Used for tel: link. No '+' or spaces." />
+                  </WebinarSection>
+
+                  <WebinarSection title="Thank-You Page — WhatsApp Card">
+                    <Field label="Title" value={webinar.thankyouWhatsappTitle ?? ''} onChange={v => updateWebinarField('thankyouWhatsappTitle', v)} placeholder="Chat on WhatsApp" />
+                    <TextField label="Body" value={webinar.thankyouWhatsappBody ?? ''} onChange={v => updateWebinarField('thankyouWhatsappBody', v)} rows={2} />
+                    <Field label="CTA text" value={webinar.thankyouWhatsappCta ?? ''} onChange={v => updateWebinarField('thankyouWhatsappCta', v)} placeholder="Chat Now" />
+                    <Field label="WhatsApp number" value={webinar.thankyouWhatsappNumber ?? ''} onChange={v => updateWebinarField('thankyouWhatsappNumber', v)} placeholder="919555525908" />
+                    <TextField label="Pre-filled message" value={webinar.thankyouWhatsappMessage ?? ''} onChange={v => updateWebinarField('thankyouWhatsappMessage', v)} rows={2} />
+                  </WebinarSection>
+
+                  <WebinarSection title="Thank-You Page — Footer & Brochure">
+                    <Field label="Footer text (use {YEAR} for current year)" value={webinar.thankyouFooterText ?? ''} onChange={v => updateWebinarField('thankyouFooterText', v)} placeholder="© {YEAR} AnalytixLabs..." />
+                    <Field label="Generic brochure URL" value={webinar.genericBrochureUrl ?? ''} onChange={v => updateWebinarField('genericBrochureUrl', v)} placeholder="https://..." hint="Used when no per-course slug match. Course-specific URLs still come from NEXT_PUBLIC_BROCHURE_* env vars." />
+                    <Field label="Generic brochure CTA" value={webinar.genericBrochureCta ?? ''} onChange={v => updateWebinarField('genericBrochureCta', v)} placeholder="Download File now" />
+                  </WebinarSection>
+
+                  <div className="flex items-center gap-4 pt-6 mt-2 border-t border-slate-200">
+                    <button
+                      type="button"
+                      onClick={handleWebinarSave}
+                      disabled={isSavingWebinar}
+                      className="bg-[#003368] hover:bg-[#002244] text-white font-bold py-2 px-6 rounded-lg text-sm transition-all flex items-center gap-2 disabled:opacity-60"
+                    >
+                      {isSavingWebinar ? <><Loader2 className="w-4 h-4 animate-spin"/> Saving...</> : "Save Changes"}
+                    </button>
+                    {webinarMessage && (
+                      <span className={`text-sm font-semibold ${webinarMessage.includes('success') ? 'text-[#00DF83]' : 'text-red-500'}`}>
+                        {webinarMessage}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Features Tab */}
+          {activeTab === "features" && (
+            <div className="max-w-3xl">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-[#003368]">Features Grid</h2>
+                  <p className="text-sm text-slate-500 mt-1">The "What You'll Master" cards (max 12). Set accent = "gold" for a gold-tinted icon tile.</p>
+                </div>
+                <button
+                  onClick={handleFeatureAdd}
+                  className="flex items-center gap-2 bg-[#00DF83] hover:bg-[#00C975] text-[#003368] font-bold py-2 px-4 rounded-lg text-sm transition-all"
+                >
+                  <Plus className="w-4 h-4" /> Add Feature
+                </button>
+              </div>
+
+              {isLoadingFeatures ? (
+                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#00DF83] animate-spin" /></div>
+              ) : features.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                  No features yet. Click "Add Feature" to create the first one.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {features.map((feat, idx) => (
+                    <div key={feat.id} className="bg-white border border-slate-200 rounded-xl p-5">
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <span className="text-xs font-semibold text-slate-400 mt-2">#{idx + 1}</span>
+                        <div className="flex items-center gap-1">
+                          <button type="button" onClick={() => handleFeatureMove(idx, -1)} disabled={idx === 0} className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ArrowUp className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleFeatureMove(idx, 1)} disabled={idx === features.length - 1} className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ArrowDown className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleFeatureDelete(idx)} className="p-1.5 rounded-md text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div className="grid grid-cols-3 gap-3">
+                          <div>
+                            <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Icon</label>
+                            <input type="text" value={feat.icon ?? ''} maxLength={40} onChange={e => handleFeatureChange(idx, 'icon', e.target.value)} placeholder="✦ or ⚒ or 🚀" className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]" />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Accent</label>
+                            <select value={feat.accent ?? ''} onChange={e => handleFeatureChange(idx, 'accent', e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83] bg-white">
+                              <option value="">Default (green)</option>
+                              <option value="gold">Gold</option>
+                            </select>
+                          </div>
+                          <div className="col-span-1"></div>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Title</label>
+                          <input type="text" value={feat.title} maxLength={120} onChange={e => handleFeatureChange(idx, 'title', e.target.value)} placeholder="e.g. AI-Powered Analytics" className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Description</label>
+                          <textarea rows={2} value={feat.description} maxLength={500} onChange={e => handleFeatureChange(idx, 'description', e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 pt-6 mt-2 border-t border-slate-200">
+                <button type="button" onClick={handleFeaturesSave} disabled={isSavingFeatures || isLoadingFeatures} className="bg-[#003368] hover:bg-[#002244] text-white font-bold py-2 px-6 rounded-lg text-sm transition-all flex items-center gap-2 disabled:opacity-60">
+                  {isSavingFeatures ? <><Loader2 className="w-4 h-4 animate-spin"/> Saving...</> : "Save Changes"}
+                </button>
+                {featureMessage && (
+                  <span className={`text-sm font-semibold ${featureMessage.includes('success') ? 'text-[#00DF83]' : 'text-red-500'}`}>{featureMessage}</span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Agenda Tab */}
+          {activeTab === "agenda" && (
+            <div className="max-w-3xl">
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="text-lg font-bold text-[#003368]">Agenda Timeline</h2>
+                  <p className="text-sm text-slate-500 mt-1">The "Inside the Session" walkthrough (max 20). Toggle "Highlight" for the dark-blue closing card (e.g. Program Walkthrough).</p>
+                </div>
+                <button onClick={handleAgendaAdd} className="flex items-center gap-2 bg-[#00DF83] hover:bg-[#00C975] text-[#003368] font-bold py-2 px-4 rounded-lg text-sm transition-all">
+                  <Plus className="w-4 h-4" /> Add Step
+                </button>
+              </div>
+
+              {isLoadingAgenda ? (
+                <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#00DF83] animate-spin" /></div>
+              ) : agenda.length === 0 ? (
+                <div className="py-12 text-center text-slate-500 bg-slate-50 rounded-xl border border-slate-200 border-dashed">
+                  No agenda items yet. Click "Add Step" to create the first one.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {agenda.map((item, idx) => (
+                    <div key={item.id} className={`bg-white border rounded-xl p-5 ${item.highlight ? 'border-[#003368]' : 'border-slate-200'}`}>
+                      <div className="flex items-start justify-between gap-3 mb-3">
+                        <span className="text-xs font-semibold text-slate-400 mt-2">#{String(idx + 1).padStart(2, '0')}</span>
+                        <div className="flex items-center gap-2">
+                          <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 cursor-pointer select-none">
+                            <input type="checkbox" checked={item.highlight} onChange={() => handleAgendaToggleHighlight(idx)} className="rounded accent-[#003368]" /> Highlight
+                          </label>
+                          <button type="button" onClick={() => handleAgendaMove(idx, -1)} disabled={idx === 0} className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ArrowUp className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleAgendaMove(idx, 1)} disabled={idx === agenda.length - 1} className="p-1.5 rounded-md text-slate-500 hover:bg-slate-100 disabled:opacity-30"><ArrowDown className="w-4 h-4" /></button>
+                          <button type="button" onClick={() => handleAgendaDelete(idx)} className="p-1.5 rounded-md text-red-500 hover:bg-red-50"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </div>
+                      <div className="space-y-3">
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Title</label>
+                          <input type="text" value={item.title} maxLength={200} onChange={e => handleAgendaChange(idx, 'title', e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]" />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">Description</label>
+                          <textarea rows={3} value={item.description} maxLength={1000} onChange={e => handleAgendaChange(idx, 'description', e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83]" />
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex items-center gap-4 pt-6 mt-2 border-t border-slate-200">
+                <button type="button" onClick={handleAgendaSave} disabled={isSavingAgenda || isLoadingAgenda} className="bg-[#003368] hover:bg-[#002244] text-white font-bold py-2 px-6 rounded-lg text-sm transition-all flex items-center gap-2 disabled:opacity-60">
+                  {isSavingAgenda ? <><Loader2 className="w-4 h-4 animate-spin"/> Saving...</> : "Save Changes"}
+                </button>
+                {agendaMessage && (
+                  <span className={`text-sm font-semibold ${agendaMessage.includes('success') ? 'text-[#00DF83]' : 'text-red-500'}`}>{agendaMessage}</span>
+                )}
+              </div>
+            </div>
+          )}
+
         </div>
       </div>
+    </div>
+  );
+}
+
+// ─── Small UI helpers for the Webinar tab ───────────────────────────────────
+
+function WebinarSection({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div className="bg-slate-50 border border-slate-100 rounded-xl p-5">
+      <h3 className="text-sm font-bold text-[#003368] uppercase tracking-wider mb-4">{title}</h3>
+      <div className="space-y-3">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, value, onChange, placeholder, hint }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; hint?: string }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">{label}</label>
+      <input type="text" value={value} onChange={e => onChange(e.target.value)} placeholder={placeholder} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83] bg-white" />
+      {hint && <p className="text-[11px] text-slate-400 mt-1">{hint}</p>}
+    </div>
+  );
+}
+
+function TextField({ label, value, onChange, rows = 3 }: { label: string; value: string; onChange: (v: string) => void; rows?: number }) {
+  return (
+    <div>
+      <label className="block text-xs font-semibold mb-1 text-slate-600 uppercase tracking-wide">{label}</label>
+      <textarea rows={rows} value={value} onChange={e => onChange(e.target.value)} className="w-full border border-slate-300 rounded-lg px-4 py-2 text-sm outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83] bg-white" />
     </div>
   );
 }

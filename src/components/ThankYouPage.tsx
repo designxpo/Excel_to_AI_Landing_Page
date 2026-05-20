@@ -27,25 +27,73 @@ const COURSE_DISPLAY_NAMES: Record<string, string> = {
   'data-science-python':'Data Science With Python',
 };
 
+export interface ThankYouCopy {
+  heading?: string | null;
+  subCopy?: string | null;
+  confirmationTemplate?: string | null;       // supports {email}
+  webinarTitlePersonal?: string | null;
+  webinarTitleDefault?: string | null;
+  webinarBodyPersonal?: string | null;
+  webinarBodyDefault?: string | null;
+  webinarCtaPersonal?: string | null;
+  webinarCtaDefault?: string | null;
+  phoneTitle?: string | null;
+  phoneBody?: string | null;
+  phoneCta?: string | null;
+  phoneNumber?: string | null;
+  whatsappTitle?: string | null;
+  whatsappBody?: string | null;
+  whatsappCta?: string | null;
+  whatsappNumber?: string | null;
+  whatsappMessage?: string | null;
+  footerText?: string | null;                 // supports {YEAR}
+  brochureUrl?: string | null;
+  brochureCta?: string | null;
+}
+
 interface ThankYouProps {
-  heading: string;
-  subCopy: string;
+  // Legacy props (still supported for backward compatibility)
+  heading?: string;
+  subCopy?: string;
   conversionId?: string;
-  verifiedConversionId?: string; // NEW: Primary conversion for OTP verified leads
+  verifiedConversionId?: string;
   isBrochureDownload?: boolean;
+  /** Full copy override sourced from admin-editable webinar config. */
+  copy?: ThankYouCopy;
 }
 
 const WEBINAR_URL = process.env.NEXT_PUBLIC_ZOOM_WEBINAR_URL || 'https://us06web.zoom.us/webinar/register/7517736425815/WN_MwlIZpQCRcmKz_LG4Y3OwQ';
-const BROCHURE_PDF_URL = process.env.NEXT_PUBLIC_BROCHURE_URL || 'https://www.analytixlabs.co.in/pdf/Nasscom_(ACDS)_Advanced_Certification_in_Data_Science_Alabs280126.pdf';
-const PHONE_NUMBER = '919555525908';
-const WA_MESSAGE = encodeURIComponent(
-  'Hello, I just submitted my details on the AnalytixLabs website. Can you help me?'
-);
+const FALLBACK_BROCHURE_PDF_URL = process.env.NEXT_PUBLIC_BROCHURE_URL || 'https://www.analytixlabs.co.in/pdf/Nasscom_(ACDS)_Advanced_Certification_in_Data_Science_Alabs280126.pdf';
+const FALLBACK_PHONE_NUMBER = '919555525908';
+const FALLBACK_WA_MESSAGE = 'Hello, I just submitted my details on the AnalytixLabs website. Can you help me?';
 
 const navy = "#09263F";
 const teal = "#1DE5B5";
 
-export default function ThankYouPage({ heading, subCopy, conversionId, verifiedConversionId, isBrochureDownload }: ThankYouProps) {
+export default function ThankYouPage({ heading: headingProp, subCopy: subCopyProp, conversionId, verifiedConversionId, isBrochureDownload, copy = {} }: ThankYouProps) {
+  // Resolve copy with priority: explicit copy override → legacy props → hardcoded fallback.
+  const heading                = copy.heading              ?? headingProp ?? "You're Registered!";
+  const subCopy                = copy.subCopy              ?? subCopyProp ?? 'Your spot for the upcoming masterclass is confirmed. Check your email for joining details.';
+  const confirmationTpl        = copy.confirmationTemplate ?? 'Confirmation sent to: {email}';
+  const webinarTitlePersonal   = copy.webinarTitlePersonal ?? 'Your Webinar Access';
+  const webinarTitleDefault    = copy.webinarTitleDefault  ?? 'Upcoming Webinar';
+  const webinarBodyPersonal    = copy.webinarBodyPersonal  ?? "You're confirmed. Click below to join your masterclass when it begins — no extra signup needed.";
+  const webinarBodyDefault     = copy.webinarBodyDefault   ?? 'Expert guidance on building a career in Data Science. Free access.';
+  const webinarCtaPersonal     = copy.webinarCtaPersonal   ?? 'Join Webinar →';
+  const webinarCtaDefault      = copy.webinarCtaDefault    ?? 'Save My Spot →';
+  const phoneTitle             = copy.phoneTitle           ?? 'Need Help? Talk to Us';
+  const phoneBody              = copy.phoneBody            ?? 'Advisors available Mon–Sat, 9 AM to 7 PM.';
+  const phoneCta               = copy.phoneCta             ?? 'Call 95555 25908';
+  const phoneNumber            = copy.phoneNumber          ?? FALLBACK_PHONE_NUMBER;
+  const whatsappTitle          = copy.whatsappTitle        ?? 'Chat on WhatsApp';
+  const whatsappBody           = copy.whatsappBody         ?? 'Connect with our counsellor instantly on WhatsApp.';
+  const whatsappCta            = copy.whatsappCta          ?? 'Chat Now';
+  const whatsappNumber         = copy.whatsappNumber       ?? FALLBACK_PHONE_NUMBER;
+  const whatsappMessage        = encodeURIComponent(copy.whatsappMessage ?? FALLBACK_WA_MESSAGE);
+  const footerYear             = new Date().getFullYear();
+  const footerText             = (copy.footerText ?? '© {YEAR} AnalytixLabs. All rights reserved. | NASSCOM-FutureSkills Prime Accredited.').replace('{YEAR}', String(footerYear));
+  const brochurePdfUrl         = copy.brochureUrl          ?? FALLBACK_BROCHURE_PDF_URL;
+  const brochureGenericCta     = copy.brochureCta          ?? 'Download File now';
   const searchParams = useSearchParams();
   const rawEmail = searchParams.get('email') || '';
   const rawName = searchParams.get('name') || '';
@@ -157,7 +205,7 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
               marginBottom: isBrochureDownload ? '32px' : '0'
             }}>
               {name && <span style={{ marginRight: '8px' }}>{name} ·</span>}
-              <span>Confirmation sent to: {email}</span>
+              <span>{confirmationTpl.replace('{email}', email)}</span>
             </div>
           )}
 
@@ -181,7 +229,7 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
                   ⬇ Download {courseDisplayName} Brochure
                 </a>
               ) : !courseSlug ? (
-                <a href={BROCHURE_PDF_URL} target="_blank" rel="noopener noreferrer"
+                <a href={brochurePdfUrl} target="_blank" rel="noopener noreferrer"
                   style={{
                     background: teal,
                     color: navy,
@@ -194,7 +242,7 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
                     boxShadow: '0 8px 30px rgba(29,229,181,0.3)',
                     transition: 'all 0.2s'
                   }}>
-                  Download File now
+                  {brochureGenericCta}
                 </a>
               ) : null}
             </div>
@@ -210,42 +258,40 @@ export default function ThankYouPage({ heading, subCopy, conversionId, verifiedC
           {/* Card 1 — Webinar */}
           <div style={cardStyle}>
             <div style={iconStyle}>🎥</div>
-            <h3 style={cardTitle}>{hasPersonalZoom ? 'Your Webinar Access' : 'Upcoming Webinar'}</h3>
+            <h3 style={cardTitle}>{hasPersonalZoom ? webinarTitlePersonal : webinarTitleDefault}</h3>
             <p style={cardBody}>
-              {hasPersonalZoom
-                ? "You're confirmed. Click below to join your masterclass when it begins — no extra signup needed."
-                : 'Expert guidance on building a career in Data Science. Free access.'}
+              {hasPersonalZoom ? webinarBodyPersonal : webinarBodyDefault}
             </p>
             <a href={effectiveWebinarUrl} target="_blank" rel="noopener noreferrer" style={btnPrimary}>
-              {hasPersonalZoom ? 'Join Webinar →' : 'Save My Spot →'}
+              {hasPersonalZoom ? webinarCtaPersonal : webinarCtaDefault}
             </a>
           </div>
 
           {/* Card 2 — Phone */}
           <div style={cardStyle}>
             <div style={iconStyle}>📞</div>
-            <h3 style={cardTitle}>Need Help? Talk to Us</h3>
-            <p style={cardBody}>Advisors available Mon–Sat, 9 AM to 7 PM.</p>
-            <a href={`tel:${PHONE_NUMBER}`} style={btnOutline}>
-              Call 95555 25908
+            <h3 style={cardTitle}>{phoneTitle}</h3>
+            <p style={cardBody}>{phoneBody}</p>
+            <a href={`tel:${phoneNumber}`} style={btnOutline}>
+              {phoneCta}
             </a>
           </div>
 
           {/* Card 3 — WhatsApp */}
           <div style={cardStyle}>
             <div style={iconStyle}>💬</div>
-            <h3 style={cardTitle}>Chat on WhatsApp</h3>
-            <p style={cardBody}>Connect with our counsellor instantly on WhatsApp.</p>
-            <a href={`https://api.whatsapp.com/send?phone=${PHONE_NUMBER}&text=${WA_MESSAGE}`}
+            <h3 style={cardTitle}>{whatsappTitle}</h3>
+            <p style={cardBody}>{whatsappBody}</p>
+            <a href={`https://api.whatsapp.com/send?phone=${whatsappNumber}&text=${whatsappMessage}`}
               target="_blank" rel="noopener noreferrer" style={btnWhatsapp}>
-              Chat Now
+              {whatsappCta}
             </a>
           </div>
         </div>
       </main>
 
       <footer style={{ textAlign: 'center', padding: '40px 24px 0', fontSize: '12px', color: '#4A6275' }}>
-        © {new Date().getFullYear()} AnalytixLabs. All rights reserved. | NASSCOM-FutureSkills Prime Accredited.
+        {footerText}
       </footer>
     </div>
   );

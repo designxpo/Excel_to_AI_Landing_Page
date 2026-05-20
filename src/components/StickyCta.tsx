@@ -4,7 +4,19 @@ import { useEffect, useState } from 'react';
 
 const SCROLL_THRESHOLD = 0.15;
 
-export function StickyCta() {
+export function StickyCta({
+  desktopEyebrow,
+  desktopMain,
+  mobileEyebrow,
+}: {
+  desktopEyebrow?: string | null;
+  desktopMain?: string | null;
+  mobileEyebrow?: string | null;
+}) {
+  const eyebrowDesktop = desktopEyebrow ?? 'Sat, 7 June 2026 · 11:00 AM IST · Live Online';
+  const mainDesktop = desktopMain ?? 'Limited free seats — reserve yours before registrations close.';
+  const eyebrowMobile = mobileEyebrow ?? '7 Jun · 11 AM IST · Free Online';
+
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -32,8 +44,8 @@ export function StickyCta() {
         <div className="hidden md:flex md:items-center md:gap-3 md:leading-tight">
           <img src="/fire.gif" alt="" aria-hidden="true" className="h-10 w-10 flex-shrink-0" />
           <div className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-widest font-bold text-[#00DF83]">Sat, 7 June 2026 · 11:00 AM IST · Live Online</span>
-            <span className="text-base font-extrabold text-[#003368]">Limited free seats — reserve yours before registrations close.</span>
+            <span className="text-[11px] uppercase tracking-widest font-bold text-[#00DF83]">{eyebrowDesktop}</span>
+            <span className="text-base font-extrabold text-[#003368]">{mainDesktop}</span>
           </div>
         </div>
         <a
@@ -43,7 +55,7 @@ export function StickyCta() {
           <span className="flex items-center gap-2 md:hidden">
             <img src="/fire.gif" alt="" aria-hidden="true" className="h-9 w-9 flex-shrink-0" />
             <span className="flex flex-col text-left leading-tight">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-[#00DF83]">7 Jun · 11 AM IST · Free Online</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-[#00DF83]">{eyebrowMobile}</span>
               <span className="text-sm font-extrabold text-white">Book Your Free Spot Now</span>
             </span>
           </span>

@@ -47,6 +47,308 @@ type SettingsRow = {
   speaker_title: string;
   speaker_image: string;
   speaker_bio: string;
+  // Dynamic webinar fields (Phase 1 — all nullable, code falls back to hardcoded values)
+  webinar_title?: string | null;
+  webinar_subtitle?: string | null;
+  eyebrow_text?: string | null;
+  webinar_date_label?: string | null;
+  webinar_time_label?: string | null;
+  webinar_datetime_utc?: string | null;
+  duration_label?: string | null;
+  meta_title?: string | null;
+  meta_description?: string | null;
+  og_image_url?: string | null;
+  form_heading?: string | null;
+  form_subheading?: string | null;
+  sticky_eyebrow?: string | null;
+  sticky_main?: string | null;
+  cta_button_text?: string | null;
+  nav_cta_text?: string | null;
+  logo_path?: string | null;
+  zoom_webinar_id?: string | null;
+  lsq_source_name?: string | null;
+  whatsapp_template_name?: string | null;
+  hero_stat_1_value?: string | null;
+  hero_stat_1_label?: string | null;
+  hero_stat_2_value?: string | null;
+  hero_stat_2_label?: string | null;
+  hero_stat_3_value?: string | null;
+  hero_stat_3_label?: string | null;
+  show_definition_section?: boolean | null;
+  definition_section_title?: string | null;
+  definition_intro?: string | null;
+  definition_a_title?: string | null;
+  definition_a_body?: string | null;
+  definition_b_title?: string | null;
+  definition_b_body?: string | null;
+  agenda_section_title?: string | null;
+  agenda_section_subtitle?: string | null;
+  faculty_intro?: string | null;
+  footer_text?: string | null;
+  // Phase 2 fields
+  hero_eyebrow_pill?: string | null;
+  hero_h1_markup?: string | null;
+  hero_subtitle?: string | null;
+  countdown_label?: string | null;
+  urgency_badge_text?: string | null;
+  save_spot_cta_text?: string | null;
+  form_pill_date_label?: string | null;
+  form_pill_seats_label?: string | null;
+  form_otp_footer_label?: string | null;
+  form_bottom_stat_1_value?: string | null;
+  form_bottom_stat_1_label?: string | null;
+  form_bottom_stat_2_value?: string | null;
+  form_bottom_stat_2_label?: string | null;
+  form_bottom_stat_3_value?: string | null;
+  form_bottom_stat_3_label?: string | null;
+  stats_disclaimer?: string | null;
+  partnership_caption?: string | null;
+  partnership_image_path?: string | null;
+  definition_eyebrow?: string | null;
+  definition_a_bullets?: string | null;
+  definition_b_bullets?: string | null;
+  features_section_title?: string | null;
+  features_section_subtitle?: string | null;
+  features_image_path?: string | null;
+  session_inside_pill?: string | null;
+  session_badge_1?: string | null;
+  session_badge_2?: string | null;
+  session_badge_3?: string | null;
+  session_obj_eyebrow?: string | null;
+  session_obj_title?: string | null;
+  session_obj_1_num?: string | null;
+  session_obj_1_title?: string | null;
+  session_obj_1_desc?: string | null;
+  session_obj_2_num?: string | null;
+  session_obj_2_title?: string | null;
+  session_obj_2_desc?: string | null;
+  session_walkthrough_eyebrow?: string | null;
+  session_walkthrough_title?: string | null;
+  faculty_heading_prefix?: string | null;
+  faq_section_title?: string | null;
+  // Phase 3 fields
+  footer_link_1_label?: string | null;
+  footer_link_1_url?: string | null;
+  footer_link_2_label?: string | null;
+  footer_link_2_url?: string | null;
+  footer_link_3_label?: string | null;
+  footer_link_3_url?: string | null;
+  footer_link_4_label?: string | null;
+  footer_link_4_url?: string | null;
+  form_label_name?: string | null;
+  form_label_email?: string | null;
+  form_label_phone?: string | null;
+  form_label_status?: string | null;
+  form_label_city?: string | null;
+  form_label_referral?: string | null;
+  form_placeholder_name?: string | null;
+  form_placeholder_email?: string | null;
+  form_placeholder_phone?: string | null;
+  form_placeholder_select?: string | null;
+  form_placeholder_city?: string | null;
+  form_status_options?: string | null;
+  form_referral_options?: string | null;
+  otp_heading?: string | null;
+  otp_subtitle_template?: string | null;
+  otp_edit_details_label?: string | null;
+  otp_verify_button_text?: string | null;
+  success_heading?: string | null;
+  success_body?: string | null;
+  faculty_chip_1?: string | null;
+  faculty_chip_2?: string | null;
+  faculty_chip_3?: string | null;
+  partnership_image_alt?: string | null;
+  // Phase 4 (ThankYouPage)
+  thankyou_heading?: string | null;
+  thankyou_subcopy?: string | null;
+  thankyou_confirmation_template?: string | null;
+  thankyou_webinar_title_personal?: string | null;
+  thankyou_webinar_title_default?: string | null;
+  thankyou_webinar_body_personal?: string | null;
+  thankyou_webinar_body_default?: string | null;
+  thankyou_webinar_cta_personal?: string | null;
+  thankyou_webinar_cta_default?: string | null;
+  thankyou_phone_title?: string | null;
+  thankyou_phone_body?: string | null;
+  thankyou_phone_cta?: string | null;
+  thankyou_phone_number?: string | null;
+  thankyou_whatsapp_title?: string | null;
+  thankyou_whatsapp_body?: string | null;
+  thankyou_whatsapp_cta?: string | null;
+  thankyou_whatsapp_number?: string | null;
+  thankyou_whatsapp_message?: string | null;
+  thankyou_footer_text?: string | null;
+  generic_brochure_url?: string | null;
+  generic_brochure_cta?: string | null;
+};
+
+export interface WebinarConfig extends SpeakerSettings {
+  webinarTitle: string | null;
+  webinarSubtitle: string | null;
+  eyebrowText: string | null;
+  webinarDateLabel: string | null;
+  webinarTimeLabel: string | null;
+  webinarDatetimeUtc: string | null;
+  durationLabel: string | null;
+  metaTitle: string | null;
+  metaDescription: string | null;
+  ogImageUrl: string | null;
+  formHeading: string | null;
+  formSubheading: string | null;
+  stickyEyebrow: string | null;
+  stickyMain: string | null;
+  ctaButtonText: string | null;
+  navCtaText: string | null;
+  logoPath: string | null;
+  zoomWebinarId: string | null;
+  lsqSourceName: string | null;
+  whatsappTemplateName: string | null;
+  heroStat1Value: string | null;
+  heroStat1Label: string | null;
+  heroStat2Value: string | null;
+  heroStat2Label: string | null;
+  heroStat3Value: string | null;
+  heroStat3Label: string | null;
+  showDefinitionSection: boolean | null;
+  definitionSectionTitle: string | null;
+  definitionIntro: string | null;
+  definitionATitle: string | null;
+  definitionABody: string | null;
+  definitionBTitle: string | null;
+  definitionBBody: string | null;
+  agendaSectionTitle: string | null;
+  agendaSectionSubtitle: string | null;
+  facultyIntro: string | null;
+  footerText: string | null;
+  // Phase 2
+  heroEyebrowPill: string | null;
+  heroH1Markup: string | null;
+  heroSubtitle: string | null;
+  countdownLabel: string | null;
+  urgencyBadgeText: string | null;
+  saveSpotCtaText: string | null;
+  formPillDateLabel: string | null;
+  formPillSeatsLabel: string | null;
+  formOtpFooterLabel: string | null;
+  formBottomStat1Value: string | null;
+  formBottomStat1Label: string | null;
+  formBottomStat2Value: string | null;
+  formBottomStat2Label: string | null;
+  formBottomStat3Value: string | null;
+  formBottomStat3Label: string | null;
+  statsDisclaimer: string | null;
+  partnershipCaption: string | null;
+  partnershipImagePath: string | null;
+  definitionEyebrow: string | null;
+  definitionABullets: string | null;
+  definitionBBullets: string | null;
+  featuresSectionTitle: string | null;
+  featuresSectionSubtitle: string | null;
+  featuresImagePath: string | null;
+  sessionInsidePill: string | null;
+  sessionBadge1: string | null;
+  sessionBadge2: string | null;
+  sessionBadge3: string | null;
+  sessionObjEyebrow: string | null;
+  sessionObjTitle: string | null;
+  sessionObj1Num: string | null;
+  sessionObj1Title: string | null;
+  sessionObj1Desc: string | null;
+  sessionObj2Num: string | null;
+  sessionObj2Title: string | null;
+  sessionObj2Desc: string | null;
+  sessionWalkthroughEyebrow: string | null;
+  sessionWalkthroughTitle: string | null;
+  facultyHeadingPrefix: string | null;
+  faqSectionTitle: string | null;
+  // Phase 3
+  footerLink1Label: string | null;
+  footerLink1Url: string | null;
+  footerLink2Label: string | null;
+  footerLink2Url: string | null;
+  footerLink3Label: string | null;
+  footerLink3Url: string | null;
+  footerLink4Label: string | null;
+  footerLink4Url: string | null;
+  formLabelName: string | null;
+  formLabelEmail: string | null;
+  formLabelPhone: string | null;
+  formLabelStatus: string | null;
+  formLabelCity: string | null;
+  formLabelReferral: string | null;
+  formPlaceholderName: string | null;
+  formPlaceholderEmail: string | null;
+  formPlaceholderPhone: string | null;
+  formPlaceholderSelect: string | null;
+  formPlaceholderCity: string | null;
+  formStatusOptions: string | null;
+  formReferralOptions: string | null;
+  otpHeading: string | null;
+  otpSubtitleTemplate: string | null;
+  otpEditDetailsLabel: string | null;
+  otpVerifyButtonText: string | null;
+  successHeading: string | null;
+  successBody: string | null;
+  facultyChip1: string | null;
+  facultyChip2: string | null;
+  facultyChip3: string | null;
+  partnershipImageAlt: string | null;
+  // Phase 4
+  thankyouHeading: string | null;
+  thankyouSubcopy: string | null;
+  thankyouConfirmationTemplate: string | null;
+  thankyouWebinarTitlePersonal: string | null;
+  thankyouWebinarTitleDefault: string | null;
+  thankyouWebinarBodyPersonal: string | null;
+  thankyouWebinarBodyDefault: string | null;
+  thankyouWebinarCtaPersonal: string | null;
+  thankyouWebinarCtaDefault: string | null;
+  thankyouPhoneTitle: string | null;
+  thankyouPhoneBody: string | null;
+  thankyouPhoneCta: string | null;
+  thankyouPhoneNumber: string | null;
+  thankyouWhatsappTitle: string | null;
+  thankyouWhatsappBody: string | null;
+  thankyouWhatsappCta: string | null;
+  thankyouWhatsappNumber: string | null;
+  thankyouWhatsappMessage: string | null;
+  thankyouFooterText: string | null;
+  genericBrochureUrl: string | null;
+  genericBrochureCta: string | null;
+}
+
+export interface Feature {
+  id: string;
+  icon: string | null;
+  title: string;
+  description: string;
+  accent: string | null;
+  sortOrder: number;
+}
+
+export interface AgendaItem {
+  id: string;
+  title: string;
+  description: string;
+  highlight: boolean;
+  sortOrder: number;
+}
+
+type FeatureRow = {
+  id: string;
+  icon: string | null;
+  title: string;
+  description: string;
+  accent: string | null;
+  sort_order: number;
+};
+
+type AgendaItemRow = {
+  id: string;
+  title: string;
+  description: string;
+  highlight: boolean;
+  sort_order: number;
 };
 
 type RegistrationRow = {
@@ -89,6 +391,170 @@ function mapRegistration(row: RegistrationRow): Registration {
 
 function mapFaq(row: FaqRow): Faq {
   return { id: row.id, q: row.question, a: row.answer, order: row.sort_order };
+}
+
+function mapWebinarConfig(row: SettingsRow): WebinarConfig {
+  return {
+    // Existing speaker fields
+    speakerName: row.speaker_name,
+    speakerTitle: row.speaker_title,
+    speakerImage: row.speaker_image,
+    speakerBio: row.speaker_bio,
+    // New dynamic fields
+    webinarTitle: row.webinar_title ?? null,
+    webinarSubtitle: row.webinar_subtitle ?? null,
+    eyebrowText: row.eyebrow_text ?? null,
+    webinarDateLabel: row.webinar_date_label ?? null,
+    webinarTimeLabel: row.webinar_time_label ?? null,
+    webinarDatetimeUtc: row.webinar_datetime_utc ?? null,
+    durationLabel: row.duration_label ?? null,
+    metaTitle: row.meta_title ?? null,
+    metaDescription: row.meta_description ?? null,
+    ogImageUrl: row.og_image_url ?? null,
+    formHeading: row.form_heading ?? null,
+    formSubheading: row.form_subheading ?? null,
+    stickyEyebrow: row.sticky_eyebrow ?? null,
+    stickyMain: row.sticky_main ?? null,
+    ctaButtonText: row.cta_button_text ?? null,
+    navCtaText: row.nav_cta_text ?? null,
+    logoPath: row.logo_path ?? null,
+    zoomWebinarId: row.zoom_webinar_id ?? null,
+    lsqSourceName: row.lsq_source_name ?? null,
+    whatsappTemplateName: row.whatsapp_template_name ?? null,
+    heroStat1Value: row.hero_stat_1_value ?? null,
+    heroStat1Label: row.hero_stat_1_label ?? null,
+    heroStat2Value: row.hero_stat_2_value ?? null,
+    heroStat2Label: row.hero_stat_2_label ?? null,
+    heroStat3Value: row.hero_stat_3_value ?? null,
+    heroStat3Label: row.hero_stat_3_label ?? null,
+    showDefinitionSection: row.show_definition_section ?? null,
+    definitionSectionTitle: row.definition_section_title ?? null,
+    definitionIntro: row.definition_intro ?? null,
+    definitionATitle: row.definition_a_title ?? null,
+    definitionABody: row.definition_a_body ?? null,
+    definitionBTitle: row.definition_b_title ?? null,
+    definitionBBody: row.definition_b_body ?? null,
+    agendaSectionTitle: row.agenda_section_title ?? null,
+    agendaSectionSubtitle: row.agenda_section_subtitle ?? null,
+    facultyIntro: row.faculty_intro ?? null,
+    footerText: row.footer_text ?? null,
+    // Phase 2
+    heroEyebrowPill: row.hero_eyebrow_pill ?? null,
+    heroH1Markup: row.hero_h1_markup ?? null,
+    heroSubtitle: row.hero_subtitle ?? null,
+    countdownLabel: row.countdown_label ?? null,
+    urgencyBadgeText: row.urgency_badge_text ?? null,
+    saveSpotCtaText: row.save_spot_cta_text ?? null,
+    formPillDateLabel: row.form_pill_date_label ?? null,
+    formPillSeatsLabel: row.form_pill_seats_label ?? null,
+    formOtpFooterLabel: row.form_otp_footer_label ?? null,
+    formBottomStat1Value: row.form_bottom_stat_1_value ?? null,
+    formBottomStat1Label: row.form_bottom_stat_1_label ?? null,
+    formBottomStat2Value: row.form_bottom_stat_2_value ?? null,
+    formBottomStat2Label: row.form_bottom_stat_2_label ?? null,
+    formBottomStat3Value: row.form_bottom_stat_3_value ?? null,
+    formBottomStat3Label: row.form_bottom_stat_3_label ?? null,
+    statsDisclaimer: row.stats_disclaimer ?? null,
+    partnershipCaption: row.partnership_caption ?? null,
+    partnershipImagePath: row.partnership_image_path ?? null,
+    definitionEyebrow: row.definition_eyebrow ?? null,
+    definitionABullets: row.definition_a_bullets ?? null,
+    definitionBBullets: row.definition_b_bullets ?? null,
+    featuresSectionTitle: row.features_section_title ?? null,
+    featuresSectionSubtitle: row.features_section_subtitle ?? null,
+    featuresImagePath: row.features_image_path ?? null,
+    sessionInsidePill: row.session_inside_pill ?? null,
+    sessionBadge1: row.session_badge_1 ?? null,
+    sessionBadge2: row.session_badge_2 ?? null,
+    sessionBadge3: row.session_badge_3 ?? null,
+    sessionObjEyebrow: row.session_obj_eyebrow ?? null,
+    sessionObjTitle: row.session_obj_title ?? null,
+    sessionObj1Num: row.session_obj_1_num ?? null,
+    sessionObj1Title: row.session_obj_1_title ?? null,
+    sessionObj1Desc: row.session_obj_1_desc ?? null,
+    sessionObj2Num: row.session_obj_2_num ?? null,
+    sessionObj2Title: row.session_obj_2_title ?? null,
+    sessionObj2Desc: row.session_obj_2_desc ?? null,
+    sessionWalkthroughEyebrow: row.session_walkthrough_eyebrow ?? null,
+    sessionWalkthroughTitle: row.session_walkthrough_title ?? null,
+    facultyHeadingPrefix: row.faculty_heading_prefix ?? null,
+    faqSectionTitle: row.faq_section_title ?? null,
+    // Phase 3
+    footerLink1Label: row.footer_link_1_label ?? null,
+    footerLink1Url: row.footer_link_1_url ?? null,
+    footerLink2Label: row.footer_link_2_label ?? null,
+    footerLink2Url: row.footer_link_2_url ?? null,
+    footerLink3Label: row.footer_link_3_label ?? null,
+    footerLink3Url: row.footer_link_3_url ?? null,
+    footerLink4Label: row.footer_link_4_label ?? null,
+    footerLink4Url: row.footer_link_4_url ?? null,
+    formLabelName: row.form_label_name ?? null,
+    formLabelEmail: row.form_label_email ?? null,
+    formLabelPhone: row.form_label_phone ?? null,
+    formLabelStatus: row.form_label_status ?? null,
+    formLabelCity: row.form_label_city ?? null,
+    formLabelReferral: row.form_label_referral ?? null,
+    formPlaceholderName: row.form_placeholder_name ?? null,
+    formPlaceholderEmail: row.form_placeholder_email ?? null,
+    formPlaceholderPhone: row.form_placeholder_phone ?? null,
+    formPlaceholderSelect: row.form_placeholder_select ?? null,
+    formPlaceholderCity: row.form_placeholder_city ?? null,
+    formStatusOptions: row.form_status_options ?? null,
+    formReferralOptions: row.form_referral_options ?? null,
+    otpHeading: row.otp_heading ?? null,
+    otpSubtitleTemplate: row.otp_subtitle_template ?? null,
+    otpEditDetailsLabel: row.otp_edit_details_label ?? null,
+    otpVerifyButtonText: row.otp_verify_button_text ?? null,
+    successHeading: row.success_heading ?? null,
+    successBody: row.success_body ?? null,
+    facultyChip1: row.faculty_chip_1 ?? null,
+    facultyChip2: row.faculty_chip_2 ?? null,
+    facultyChip3: row.faculty_chip_3 ?? null,
+    partnershipImageAlt: row.partnership_image_alt ?? null,
+    // Phase 4
+    thankyouHeading: row.thankyou_heading ?? null,
+    thankyouSubcopy: row.thankyou_subcopy ?? null,
+    thankyouConfirmationTemplate: row.thankyou_confirmation_template ?? null,
+    thankyouWebinarTitlePersonal: row.thankyou_webinar_title_personal ?? null,
+    thankyouWebinarTitleDefault: row.thankyou_webinar_title_default ?? null,
+    thankyouWebinarBodyPersonal: row.thankyou_webinar_body_personal ?? null,
+    thankyouWebinarBodyDefault: row.thankyou_webinar_body_default ?? null,
+    thankyouWebinarCtaPersonal: row.thankyou_webinar_cta_personal ?? null,
+    thankyouWebinarCtaDefault: row.thankyou_webinar_cta_default ?? null,
+    thankyouPhoneTitle: row.thankyou_phone_title ?? null,
+    thankyouPhoneBody: row.thankyou_phone_body ?? null,
+    thankyouPhoneCta: row.thankyou_phone_cta ?? null,
+    thankyouPhoneNumber: row.thankyou_phone_number ?? null,
+    thankyouWhatsappTitle: row.thankyou_whatsapp_title ?? null,
+    thankyouWhatsappBody: row.thankyou_whatsapp_body ?? null,
+    thankyouWhatsappCta: row.thankyou_whatsapp_cta ?? null,
+    thankyouWhatsappNumber: row.thankyou_whatsapp_number ?? null,
+    thankyouWhatsappMessage: row.thankyou_whatsapp_message ?? null,
+    thankyouFooterText: row.thankyou_footer_text ?? null,
+    genericBrochureUrl: row.generic_brochure_url ?? null,
+    genericBrochureCta: row.generic_brochure_cta ?? null,
+  };
+}
+
+function mapFeature(row: FeatureRow): Feature {
+  return {
+    id: row.id,
+    icon: row.icon,
+    title: row.title,
+    description: row.description,
+    accent: row.accent,
+    sortOrder: row.sort_order,
+  };
+}
+
+function mapAgendaItem(row: AgendaItemRow): AgendaItem {
+  return {
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    highlight: row.highlight,
+    sortOrder: row.sort_order,
+  };
 }
 
 export async function getSettings(): Promise<SpeakerSettings> {
@@ -231,4 +697,293 @@ export async function replaceFaqs(items: Array<FaqInput & { id?: string }>): Pro
   }
 
   return clean.map(mapFaq);
+}
+
+// ─── Webinar config (dynamic LP) ─────────────────────────────────────────────
+
+/**
+ * Returns the full WebinarConfig (speaker fields + all dynamic webinar fields).
+ * Any field that's null in the DB is null in the result — callers are expected
+ * to supply hardcoded fallbacks at render time.
+ */
+export async function getWebinarConfig(): Promise<WebinarConfig> {
+  try {
+    const { data, error } = await client()
+      .from('settings')
+      .select('*')
+      .eq('id', 'speaker')
+      .maybeSingle<SettingsRow>();
+    if (error) throw error;
+    if (!data) {
+      // No row yet — return speaker defaults + all dynamic fields null.
+      return mapWebinarConfig({
+        id: 'speaker',
+        speaker_name: DEFAULT_SETTINGS.speakerName,
+        speaker_title: DEFAULT_SETTINGS.speakerTitle,
+        speaker_image: DEFAULT_SETTINGS.speakerImage,
+        speaker_bio: DEFAULT_SETTINGS.speakerBio,
+      });
+    }
+    return mapWebinarConfig(data);
+  } catch (err) {
+    console.error('[db.getWebinarConfig]', err);
+    return mapWebinarConfig({
+      id: 'speaker',
+      speaker_name: DEFAULT_SETTINGS.speakerName,
+      speaker_title: DEFAULT_SETTINGS.speakerTitle,
+      speaker_image: DEFAULT_SETTINGS.speakerImage,
+      speaker_bio: DEFAULT_SETTINGS.speakerBio,
+    });
+  }
+}
+
+export async function getFeatures(): Promise<Feature[]> {
+  try {
+    const { data, error } = await client()
+      .from('features')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(mapFeature);
+  } catch (err) {
+    console.error('[db.getFeatures]', err);
+    return [];
+  }
+}
+
+export async function getAgendaItems(): Promise<AgendaItem[]> {
+  try {
+    const { data, error } = await client()
+      .from('agenda_items')
+      .select('*')
+      .order('sort_order', { ascending: true });
+    if (error) throw error;
+    return (data ?? []).map(mapAgendaItem);
+  } catch (err) {
+    console.error('[db.getAgendaItems]', err);
+    return [];
+  }
+}
+
+/** Partial update of the singleton settings row (any subset of WebinarConfig). */
+export async function updateWebinarConfig(
+  patch: Partial<Omit<WebinarConfig, never>>,
+): Promise<WebinarConfig> {
+  const dbPatch: Record<string, unknown> = {};
+  const set = <K extends keyof typeof patch>(key: K, column: string) => {
+    if (key in patch && patch[key] !== undefined) dbPatch[column] = patch[key];
+  };
+  set('speakerName', 'speaker_name');
+  set('speakerTitle', 'speaker_title');
+  set('speakerImage', 'speaker_image');
+  set('speakerBio', 'speaker_bio');
+  set('webinarTitle', 'webinar_title');
+  set('webinarSubtitle', 'webinar_subtitle');
+  set('eyebrowText', 'eyebrow_text');
+  set('webinarDateLabel', 'webinar_date_label');
+  set('webinarTimeLabel', 'webinar_time_label');
+  set('webinarDatetimeUtc', 'webinar_datetime_utc');
+  set('durationLabel', 'duration_label');
+  set('metaTitle', 'meta_title');
+  set('metaDescription', 'meta_description');
+  set('ogImageUrl', 'og_image_url');
+  set('formHeading', 'form_heading');
+  set('formSubheading', 'form_subheading');
+  set('stickyEyebrow', 'sticky_eyebrow');
+  set('stickyMain', 'sticky_main');
+  set('ctaButtonText', 'cta_button_text');
+  set('navCtaText', 'nav_cta_text');
+  set('logoPath', 'logo_path');
+  set('zoomWebinarId', 'zoom_webinar_id');
+  set('lsqSourceName', 'lsq_source_name');
+  set('whatsappTemplateName', 'whatsapp_template_name');
+  set('heroStat1Value', 'hero_stat_1_value');
+  set('heroStat1Label', 'hero_stat_1_label');
+  set('heroStat2Value', 'hero_stat_2_value');
+  set('heroStat2Label', 'hero_stat_2_label');
+  set('heroStat3Value', 'hero_stat_3_value');
+  set('heroStat3Label', 'hero_stat_3_label');
+  set('showDefinitionSection', 'show_definition_section');
+  set('definitionSectionTitle', 'definition_section_title');
+  set('definitionIntro', 'definition_intro');
+  set('definitionATitle', 'definition_a_title');
+  set('definitionABody', 'definition_a_body');
+  set('definitionBTitle', 'definition_b_title');
+  set('definitionBBody', 'definition_b_body');
+  set('agendaSectionTitle', 'agenda_section_title');
+  set('agendaSectionSubtitle', 'agenda_section_subtitle');
+  set('facultyIntro', 'faculty_intro');
+  set('footerText', 'footer_text');
+  // Phase 2
+  set('heroEyebrowPill', 'hero_eyebrow_pill');
+  set('heroH1Markup', 'hero_h1_markup');
+  set('heroSubtitle', 'hero_subtitle');
+  set('countdownLabel', 'countdown_label');
+  set('urgencyBadgeText', 'urgency_badge_text');
+  set('saveSpotCtaText', 'save_spot_cta_text');
+  set('formPillDateLabel', 'form_pill_date_label');
+  set('formPillSeatsLabel', 'form_pill_seats_label');
+  set('formOtpFooterLabel', 'form_otp_footer_label');
+  set('formBottomStat1Value', 'form_bottom_stat_1_value');
+  set('formBottomStat1Label', 'form_bottom_stat_1_label');
+  set('formBottomStat2Value', 'form_bottom_stat_2_value');
+  set('formBottomStat2Label', 'form_bottom_stat_2_label');
+  set('formBottomStat3Value', 'form_bottom_stat_3_value');
+  set('formBottomStat3Label', 'form_bottom_stat_3_label');
+  set('statsDisclaimer', 'stats_disclaimer');
+  set('partnershipCaption', 'partnership_caption');
+  set('partnershipImagePath', 'partnership_image_path');
+  set('definitionEyebrow', 'definition_eyebrow');
+  set('definitionABullets', 'definition_a_bullets');
+  set('definitionBBullets', 'definition_b_bullets');
+  set('featuresSectionTitle', 'features_section_title');
+  set('featuresSectionSubtitle', 'features_section_subtitle');
+  set('featuresImagePath', 'features_image_path');
+  set('sessionInsidePill', 'session_inside_pill');
+  set('sessionBadge1', 'session_badge_1');
+  set('sessionBadge2', 'session_badge_2');
+  set('sessionBadge3', 'session_badge_3');
+  set('sessionObjEyebrow', 'session_obj_eyebrow');
+  set('sessionObjTitle', 'session_obj_title');
+  set('sessionObj1Num', 'session_obj_1_num');
+  set('sessionObj1Title', 'session_obj_1_title');
+  set('sessionObj1Desc', 'session_obj_1_desc');
+  set('sessionObj2Num', 'session_obj_2_num');
+  set('sessionObj2Title', 'session_obj_2_title');
+  set('sessionObj2Desc', 'session_obj_2_desc');
+  set('sessionWalkthroughEyebrow', 'session_walkthrough_eyebrow');
+  set('sessionWalkthroughTitle', 'session_walkthrough_title');
+  set('facultyHeadingPrefix', 'faculty_heading_prefix');
+  set('faqSectionTitle', 'faq_section_title');
+  // Phase 3
+  set('footerLink1Label', 'footer_link_1_label');
+  set('footerLink1Url', 'footer_link_1_url');
+  set('footerLink2Label', 'footer_link_2_label');
+  set('footerLink2Url', 'footer_link_2_url');
+  set('footerLink3Label', 'footer_link_3_label');
+  set('footerLink3Url', 'footer_link_3_url');
+  set('footerLink4Label', 'footer_link_4_label');
+  set('footerLink4Url', 'footer_link_4_url');
+  set('formLabelName', 'form_label_name');
+  set('formLabelEmail', 'form_label_email');
+  set('formLabelPhone', 'form_label_phone');
+  set('formLabelStatus', 'form_label_status');
+  set('formLabelCity', 'form_label_city');
+  set('formLabelReferral', 'form_label_referral');
+  set('formPlaceholderName', 'form_placeholder_name');
+  set('formPlaceholderEmail', 'form_placeholder_email');
+  set('formPlaceholderPhone', 'form_placeholder_phone');
+  set('formPlaceholderSelect', 'form_placeholder_select');
+  set('formPlaceholderCity', 'form_placeholder_city');
+  set('formStatusOptions', 'form_status_options');
+  set('formReferralOptions', 'form_referral_options');
+  set('otpHeading', 'otp_heading');
+  set('otpSubtitleTemplate', 'otp_subtitle_template');
+  set('otpEditDetailsLabel', 'otp_edit_details_label');
+  set('otpVerifyButtonText', 'otp_verify_button_text');
+  set('successHeading', 'success_heading');
+  set('successBody', 'success_body');
+  set('facultyChip1', 'faculty_chip_1');
+  set('facultyChip2', 'faculty_chip_2');
+  set('facultyChip3', 'faculty_chip_3');
+  set('partnershipImageAlt', 'partnership_image_alt');
+  // Phase 4
+  set('thankyouHeading', 'thankyou_heading');
+  set('thankyouSubcopy', 'thankyou_subcopy');
+  set('thankyouConfirmationTemplate', 'thankyou_confirmation_template');
+  set('thankyouWebinarTitlePersonal', 'thankyou_webinar_title_personal');
+  set('thankyouWebinarTitleDefault', 'thankyou_webinar_title_default');
+  set('thankyouWebinarBodyPersonal', 'thankyou_webinar_body_personal');
+  set('thankyouWebinarBodyDefault', 'thankyou_webinar_body_default');
+  set('thankyouWebinarCtaPersonal', 'thankyou_webinar_cta_personal');
+  set('thankyouWebinarCtaDefault', 'thankyou_webinar_cta_default');
+  set('thankyouPhoneTitle', 'thankyou_phone_title');
+  set('thankyouPhoneBody', 'thankyou_phone_body');
+  set('thankyouPhoneCta', 'thankyou_phone_cta');
+  set('thankyouPhoneNumber', 'thankyou_phone_number');
+  set('thankyouWhatsappTitle', 'thankyou_whatsapp_title');
+  set('thankyouWhatsappBody', 'thankyou_whatsapp_body');
+  set('thankyouWhatsappCta', 'thankyou_whatsapp_cta');
+  set('thankyouWhatsappNumber', 'thankyou_whatsapp_number');
+  set('thankyouWhatsappMessage', 'thankyou_whatsapp_message');
+  set('thankyouFooterText', 'thankyou_footer_text');
+  set('genericBrochureUrl', 'generic_brochure_url');
+  set('genericBrochureCta', 'generic_brochure_cta');
+
+  if (Object.keys(dbPatch).length === 0) return getWebinarConfig();
+
+  const { error } = await client()
+    .from('settings')
+    .update(dbPatch)
+    .eq('id', 'speaker');
+  if (error) throw error;
+  return getWebinarConfig();
+}
+
+export type FeatureInput = {
+  id?: string;
+  icon?: string | null;
+  title: string;
+  description: string;
+  accent?: string | null;
+};
+
+export async function replaceFeatures(items: FeatureInput[]): Promise<Feature[]> {
+  const clean: FeatureRow[] = [];
+  items.forEach((item, idx) => {
+    const title = (item.title ?? '').toString().trim();
+    const description = (item.description ?? '').toString().trim();
+    if (!title || !description) return;
+    if (title.length > 120 || description.length > 500) return;
+    clean.push({
+      id: item.id && typeof item.id === 'string' && !item.id.startsWith('new-') ? item.id : shortId(),
+      icon: item.icon ? item.icon.toString().trim().slice(0, 40) : null,
+      title,
+      description,
+      accent: item.accent === 'gold' ? 'gold' : null,
+      sort_order: idx,
+    });
+  });
+
+  const supabase = client();
+  const { error: delError } = await supabase.from('features').delete().not('id', 'is', null);
+  if (delError) throw delError;
+  if (clean.length) {
+    const { error: insError } = await supabase.from('features').insert(clean);
+    if (insError) throw insError;
+  }
+  return clean.map(mapFeature);
+}
+
+export type AgendaItemInput = {
+  id?: string;
+  title: string;
+  description: string;
+  highlight?: boolean;
+};
+
+export async function replaceAgendaItems(items: AgendaItemInput[]): Promise<AgendaItem[]> {
+  const clean: AgendaItemRow[] = [];
+  items.forEach((item, idx) => {
+    const title = (item.title ?? '').toString().trim();
+    const description = (item.description ?? '').toString().trim();
+    if (!title || !description) return;
+    if (title.length > 200 || description.length > 1000) return;
+    clean.push({
+      id: item.id && typeof item.id === 'string' && !item.id.startsWith('new-') ? item.id : shortId(),
+      title,
+      description,
+      highlight: !!item.highlight,
+      sort_order: idx,
+    });
+  });
+
+  const supabase = client();
+  const { error: delError } = await supabase.from('agenda_items').delete().not('id', 'is', null);
+  if (delError) throw delError;
+  if (clean.length) {
+    const { error: insError } = await supabase.from('agenda_items').insert(clean);
+    if (insError) throw insError;
+  }
+  return clean.map(mapAgendaItem);
 }
