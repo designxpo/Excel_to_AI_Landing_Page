@@ -47,8 +47,8 @@ export default async function MasterclassLandingPage() {
   // (for features/agenda) the table is empty, we render the original values.
   const logoPath = config.logoPath ?? '/brand/ALabs_Masterclass.svg';
   const navCtaText = config.navCtaText ?? 'Book Free Session';
-  const dateLabel = config.webinarDateLabel ?? 'Sat, 7 June 2026';
-  const timeLabel = config.webinarTimeLabel ?? '11:00 AM IST';
+  const dateLabel = config.webinarDateLabel ?? 'Sat, 6 June 2026';
+  const timeLabel = config.webinarTimeLabel ?? '7:00 PM IST';
   const formHeading = config.formHeading ?? 'Register for the Free Masterclass';
   const formSubheading = config.formSubheading ?? 'Join 15,000+ learners discovering AI-powered analytics workflows.';
   const stat1Value = config.heroStat1Value ?? '50K+';
@@ -78,7 +78,7 @@ export default async function MasterclassLandingPage() {
   const saveSpotCta      = config.saveSpotCtaText      ?? 'Save My Spot for the Live Session';
 
   // Form card
-  const formPillDate     = config.formPillDateLabel    ?? 'Sat, 7 June · 11 AM IST';
+  const formPillDate     = config.formPillDateLabel    ?? 'Sat, 6 June · 7:00 PM IST';
   const formPillSeats    = config.formPillSeatsLabel   ?? 'Limited Seats';
   // formOtpFooter (config.formOtpFooterLabel) lives inside RegistrationForm.tsx
   // and would require prop drilling — left hardcoded in the form for now.

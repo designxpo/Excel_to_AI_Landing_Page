@@ -47,7 +47,7 @@ const PHASE2 = {
   save_spot_cta_text: 'Save My Spot for the Live Session',
 
   // Form card
-  form_pill_date_label: 'Sat, 7 June · 11 AM IST',
+  form_pill_date_label: 'Sat, 6 June · 7:00 PM IST',
   form_pill_seats_label: 'Limited Seats',
   form_otp_footer_label: 'INSTANT OTP VIA WHATSAPP',
   form_bottom_stat_1_value: '4.9/5',

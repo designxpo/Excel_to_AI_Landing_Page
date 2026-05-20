@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 
-// Fallback webinar moment if no prop is passed: 7 June 2026, 11:00 AM IST (= 05:30 UTC).
-const FALLBACK_WEBINAR_MS = new Date('2026-06-07T05:30:00.000Z').getTime();
+// Fallback webinar moment if no prop is passed: 6 June 2026, 7:00 PM IST (= 13:30 UTC).
+const FALLBACK_WEBINAR_MS = new Date('2026-06-06T13:30:00.000Z').getTime();
 const CYCLE_MS = 36 * 60 * 60 * 1000;
 
 function pad(n: number) {

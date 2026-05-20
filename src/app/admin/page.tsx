@@ -711,9 +711,9 @@ export default function AdminPortal() {
               ) : (
                 <div className="space-y-8">
                   <WebinarSection title="Date & Time">
-                    <Field label="Date label (display)"  value={webinar.webinarDateLabel ?? ''}  onChange={v => updateWebinarField('webinarDateLabel', v)}  placeholder="Sat, 7 June 2026" />
-                    <Field label="Time label (display)"  value={webinar.webinarTimeLabel ?? ''}  onChange={v => updateWebinarField('webinarTimeLabel', v)}  placeholder="11:00 AM IST" />
-                    <Field label="Datetime UTC (for countdown)" value={webinar.webinarDatetimeUtc ?? ''} onChange={v => updateWebinarField('webinarDatetimeUtc', v)} placeholder="2026-06-07T05:30:00+00:00" hint="ISO 8601 in UTC. e.g. 11 AM IST = 05:30 UTC." />
+                    <Field label="Date label (display)"  value={webinar.webinarDateLabel ?? ''}  onChange={v => updateWebinarField('webinarDateLabel', v)}  placeholder="Sat, 6 June 2026" />
+                    <Field label="Time label (display)"  value={webinar.webinarTimeLabel ?? ''}  onChange={v => updateWebinarField('webinarTimeLabel', v)}  placeholder="7:00 PM IST" />
+                    <Field label="Datetime UTC (for countdown)" value={webinar.webinarDatetimeUtc ?? ''} onChange={v => updateWebinarField('webinarDatetimeUtc', v)} placeholder="2026-06-06T13:30:00+00:00" hint="ISO 8601 in UTC. e.g. 7:00 PM IST = 13:30 UTC." />
                     <Field label="Duration label" value={webinar.durationLabel ?? ''} onChange={v => updateWebinarField('durationLabel', v)} placeholder="90 Min" />
                   </WebinarSection>
 
@@ -731,7 +731,7 @@ export default function AdminPortal() {
                   </WebinarSection>
 
                   <WebinarSection title="Sticky Bottom CTA">
-                    <Field label="Eyebrow (desktop)" value={webinar.stickyEyebrow ?? ''} onChange={v => updateWebinarField('stickyEyebrow', v)} placeholder="Sat, 7 June 2026 · 11:00 AM IST · Live Online" />
+                    <Field label="Eyebrow (desktop)" value={webinar.stickyEyebrow ?? ''} onChange={v => updateWebinarField('stickyEyebrow', v)} placeholder="Sat, 6 June 2026 · 7:00 PM IST · Live Online" />
                     <TextField label="Main text" value={webinar.stickyMain ?? ''} onChange={v => updateWebinarField('stickyMain', v)} rows={2} />
                   </WebinarSection>
 
@@ -773,7 +773,7 @@ export default function AdminPortal() {
                   </WebinarSection>
 
                   <WebinarSection title="Form Card — Pills & Bottom Stats">
-                    <Field label="Form date pill (abbreviated)" value={webinar.formPillDateLabel ?? ''} onChange={v => updateWebinarField('formPillDateLabel', v)} placeholder="Sat, 7 June · 11 AM IST" />
+                    <Field label="Form date pill (abbreviated)" value={webinar.formPillDateLabel ?? ''} onChange={v => updateWebinarField('formPillDateLabel', v)} placeholder="Sat, 6 June · 7:00 PM IST" />
                     <Field label="Form seats pill" value={webinar.formPillSeatsLabel ?? ''} onChange={v => updateWebinarField('formPillSeatsLabel', v)} placeholder="Limited Seats" />
                     <Field label="OTP footer label" value={webinar.formOtpFooterLabel ?? ''} onChange={v => updateWebinarField('formOtpFooterLabel', v)} placeholder="Instant OTP via WhatsApp" hint="Currently hardcoded in form; editing won't apply until form refactor." />
                     <div className="grid grid-cols-2 gap-3">

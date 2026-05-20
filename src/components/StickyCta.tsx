@@ -13,9 +13,9 @@ export function StickyCta({
   desktopMain?: string | null;
   mobileEyebrow?: string | null;
 }) {
-  const eyebrowDesktop = desktopEyebrow ?? 'Sat, 7 June 2026 · 11:00 AM IST · Live Online';
+  const eyebrowDesktop = desktopEyebrow ?? 'Sat, 6 June 2026 · 7:00 PM IST · Live Online';
   const mainDesktop = desktopMain ?? 'Limited free seats — reserve yours before registrations close.';
-  const eyebrowMobile = mobileEyebrow ?? '7 Jun · 11 AM IST · Free Online';
+  const eyebrowMobile = mobileEyebrow ?? '6 Jun · 7:00 PM IST · Free Online';
 
   const [visible, setVisible] = useState(false);
 
