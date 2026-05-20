@@ -61,7 +61,7 @@ export default async function MasterclassLandingPage() {
           </div>
         </div>
 
-        <div className="relative max-w-5xl mx-auto px-6 py-8 md:py-12 grid lg:grid-cols-2 gap-8 items-center">
+        <div className="relative max-w-5xl mx-auto px-6 py-8 md:py-12 grid lg:grid-cols-2 gap-8 items-start">
           {/* Left Content */}
           <div className="z-10">
             <div className="inline-flex items-center gap-2 bg-[#00DF83]/10 border border-[#00DF83]/20 rounded-full px-4 py-2 text-sm font-semibold text-[#003368] mb-4">
