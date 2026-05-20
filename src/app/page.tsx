@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import Image from "next/image";
 import { RegistrationForm } from "@/components/RegistrationForm";
 import { StickyCta } from "@/components/StickyCta";
+import { Countdown } from "@/components/Countdown";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { getSettings, getFaqs } from "@/lib/db";
 import SeoJsonLd from "@/components/SeoJsonLd";
@@ -63,8 +64,24 @@ export default async function MasterclassLandingPage() {
         <div className="relative max-w-5xl mx-auto px-6 py-8 md:py-12 grid lg:grid-cols-2 gap-8 items-center">
           {/* Left Content */}
           <div className="z-10">
-            <div className="inline-flex items-center gap-2 bg-[#00DF83]/10 border border-[#00DF83]/20 rounded-full px-4 py-2 text-sm font-semibold text-[#003368] mb-8">
+            <div className="inline-flex items-center gap-2 bg-[#00DF83]/10 border border-[#00DF83]/20 rounded-full px-4 py-2 text-sm font-semibold text-[#003368] mb-4">
               🚀 Free 90-Minute Live Masterclass • Beginner Friendly
+            </div>
+
+            {/* Date/Time Urgency Strip */}
+            <div className="flex flex-wrap items-center gap-2 mb-6">
+              <div className="inline-flex items-center gap-2 bg-gradient-to-r from-[#003368] to-[#002854] text-white rounded-lg px-3 py-2 shadow-md shadow-[#003368]/20">
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                </span>
+                <span className="text-xs font-extrabold uppercase tracking-wider">Sat, 7 June 2026</span>
+                <span className="text-[#00DF83] font-bold">•</span>
+                <span className="text-xs font-extrabold uppercase tracking-wider">11:00 AM IST</span>
+              </div>
+              <div className="inline-flex items-center gap-1.5 bg-red-50 border border-red-100 rounded-lg px-2.5 py-2 text-[10px] font-extrabold text-red-600 uppercase tracking-wider">
+                Filling Fast
+              </div>
             </div>
 
             <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold leading-tight tracking-tight mb-5 text-[#003368]">
@@ -76,6 +93,14 @@ export default async function MasterclassLandingPage() {
             <p className="text-base text-slate-600 leading-relaxed max-w-md mb-6 font-normal">
               Master the high-demand stack of Excel, SQL, Python, and Power BI with AI integration. Learn from the "og" mentors at AnalytixLabs.
             </p>
+
+            {/* Countdown to webinar */}
+            <div className="mb-6 max-w-md">
+              <p className="text-[10px] uppercase tracking-[0.2em] font-bold text-slate-500 mb-2">
+                Registrations close in
+              </p>
+              <Countdown variant="dark" />
+            </div>
 
             {/* Stats */}
             <div className="grid grid-cols-3 gap-2 mb-8">
@@ -122,9 +147,15 @@ export default async function MasterclassLandingPage() {
 
             <div className="relative bg-white text-[#003368] rounded-xl p-4 md:p-6 shadow-[0_16px_40px_-8px_rgba(0,51,104,0.08)] border border-slate-100">
               <div className="mb-6">
-                <div className="inline-flex items-center gap-2 bg-red-50 text-red-600 font-bold rounded-full px-2.5 py-1 text-[9px] mb-3 uppercase tracking-wider border border-red-100">
-                  <span className="w-1 h-1 rounded-full bg-red-500 animate-pulse"></span>
-                  Limited Seats Available
+                <div className="flex items-center justify-between bg-gradient-to-r from-red-50 via-orange-50 to-red-50 border border-red-100 rounded-lg px-3 py-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <span className="relative flex h-2 w-2">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                    </span>
+                    <span className="text-[11px] font-extrabold text-red-600 uppercase tracking-wider">Sat, 7 June · 11 AM IST</span>
+                  </div>
+                  <span className="text-[10px] font-extrabold text-red-600 uppercase tracking-wider">Limited Seats</span>
                 </div>
 
                 <h2 className="text-xl font-bold leading-tight mb-2 tracking-tight">

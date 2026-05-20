@@ -32,8 +32,8 @@ export function StickyCta() {
         <div className="hidden md:flex md:items-center md:gap-3 md:leading-tight">
           <img src="/fire.gif" alt="" aria-hidden="true" className="h-10 w-10 flex-shrink-0" />
           <div className="flex flex-col">
-            <span className="text-[11px] uppercase tracking-widest font-bold text-[#00DF83]">Limited Free Seats · Live Online Masterclass</span>
-            <span className="text-base font-extrabold text-[#003368]">Reserve your free spot before registrations close.</span>
+            <span className="text-[11px] uppercase tracking-widest font-bold text-[#00DF83]">Sat, 7 June 2026 · 11:00 AM IST · Live Online</span>
+            <span className="text-base font-extrabold text-[#003368]">Limited free seats — reserve yours before registrations close.</span>
           </div>
         </div>
         <a
@@ -43,7 +43,7 @@ export function StickyCta() {
           <span className="flex items-center gap-2 md:hidden">
             <img src="/fire.gif" alt="" aria-hidden="true" className="h-9 w-9 flex-shrink-0" />
             <span className="flex flex-col text-left leading-tight">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-[#00DF83]">Limited Free Seats · Live Online</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-[#00DF83]">7 Jun · 11 AM IST · Free Online</span>
               <span className="text-sm font-extrabold text-white">Book Your Free Spot Now</span>
             </span>
           </span>
