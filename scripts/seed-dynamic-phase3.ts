@@ -70,10 +70,11 @@ const PHASE3 = {
   success_heading: "You're Registered!",
   success_body: 'Check your WhatsApp and Email for the Zoom link. We look forward to seeing you there!',
 
-  // Faculty chips
+  // Faculty chips — Certificate removed per business decision (not offered).
+  // Admin can re-add a third chip via /admin → Webinar tab.
   faculty_chip_1: 'Live Q&A',
   faculty_chip_2: 'Hands-on Lab',
-  faculty_chip_3: 'Certificate',
+  faculty_chip_3: null,
 
   // Trusted-by alt
   partnership_image_alt: 'AnalytixLabs alumni placed at Google, Amazon, Deloitte, Accenture and other top companies',
