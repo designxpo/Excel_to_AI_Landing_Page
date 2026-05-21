@@ -7,7 +7,8 @@
  *
  * Sorted by approximate population / typical lead volume.
  */
-export const INDIAN_CITIES: readonly string[] = [
+// Raw list — may contain duplicates if edited by hand. We de-dupe below.
+const _RAW_CITIES: readonly string[] = [
   // Metros
   'Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata',
   // NCR + major Tier-1
@@ -23,7 +24,7 @@ export const INDIAN_CITIES: readonly string[] = [
   'Guntur', 'Bhiwandi', 'Saharanpur', 'Gorakhpur', 'Bikaner', 'Amravati',
   'Jamshedpur', 'Cuttack', 'Bhavnagar', 'Dehradun', 'Durgapur', 'Asansol',
   'Nanded', 'Kolhapur', 'Ajmer', 'Ulhasnagar', 'Akola', 'Jamnagar',
-  'Loni', 'Siliguri', 'Jhansi', 'Ulhasnagar', 'Nellore', 'Sangli',
+  'Loni', 'Siliguri', 'Jhansi', 'Nellore', 'Sangli',
   'Belgaum', 'Mangalore', 'Tirunelveli', 'Malegaon', 'Gaya', 'Tiruppur',
   'Davanagere', 'Kozhikode', 'Akbarpur', 'Kurnool', 'Bokaro Steel City', 'Rajahmundry',
   'Ballari', 'Agartala', 'Bhagalpur', 'Latur', 'Dhule', 'Korba',
@@ -34,8 +35,12 @@ export const INDIAN_CITIES: readonly string[] = [
   'Jammu', 'Pondicherry', 'Goa', 'Panaji', 'Madgaon', 'Vasco da Gama',
   // Less common but frequently submitted
   'Anand', 'Bhilai', 'Ujjain', 'Erode', 'Rourkela', 'Junagadh',
-  'Gulbarga', 'Mathura', 'Firozabad', 'Cuttack', 'Bhatpara', 'Bardhaman',
+  'Gulbarga', 'Mathura', 'Firozabad', 'Bhatpara', 'Bardhaman',
 ];
+
+// De-duped at module load time, preserving the original order. Guarantees
+// uniqueness for React's `key` prop even if a future edit reintroduces a dupe.
+export const INDIAN_CITIES: readonly string[] = Array.from(new Set(_RAW_CITIES));
 
 /**
  * Validates that the typed city looks like a real city name.
