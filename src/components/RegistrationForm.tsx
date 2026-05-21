@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase, Megaphone } from "lucide-react";
 import { initBehaviourTracking, getBehaviourSnapshot } from "@/utils/trackBehaviour";
+import { INDIAN_CITIES, isValidCity } from "@/lib/indian-cities";
 
 export interface RegistrationFormCopy {
   labelName?: string | null;
@@ -121,6 +122,17 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
       gclidRef.current = gclid;
       sessionStorage.setItem("gclid", gclid);
     }
+
+    // Pre-fill City from Vercel edge geolocation (IP → city, no permission prompt).
+    // Only fills if the user hasn't already typed something.
+    fetch('/api/geo')
+      .then(r => r.json())
+      .then((g: { city?: string | null }) => {
+        if (g?.city && isValidCity(g.city)) {
+          setFormData(prev => prev.city ? prev : { ...prev, city: g.city! });
+        }
+      })
+      .catch(() => { /* silent — fallback is empty field */ });
   }, []);
 
   useEffect(() => {
@@ -138,6 +150,10 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
     e.preventDefault();
     if (!/^[6-9]\d{9}$/.test(formData.phone)) {
       setError("Please enter a valid 10-digit phone number.");
+      return;
+    }
+    if (!isValidCity(formData.city)) {
+      setError("Please enter your real city name (letters only, at least 3 characters).");
       return;
     }
 
@@ -314,7 +330,23 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
           </div>
           <div>
             <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><MapPin className="w-3 h-3" /> {labelCity}</label>
-            <input type="text" name="city" required value={formData.city} onChange={handleInputChange} placeholder={phCity} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+            <input
+              type="text"
+              name="city"
+              list="lp-cities"
+              autoComplete="address-level2"
+              required
+              minLength={3}
+              maxLength={60}
+              pattern="[\p{L} '\-.]{3,60}"
+              value={formData.city}
+              onChange={handleInputChange}
+              placeholder={phCity}
+              className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50"
+            />
+            <datalist id="lp-cities">
+              {INDIAN_CITIES.map(c => <option key={c} value={c} />)}
+            </datalist>
           </div>
         </div>
         <div>
