@@ -61,6 +61,15 @@ export async function sendMetaCapiEvent(event: MetaCapiEvent): Promise<CapiResul
       return { ok: false, error: 'META_CAPI not configured (missing pixel ID or access token)' };
     }
 
+    // Hard-guard: event_id is required for browser ↔ server deduplication.
+    // Empty/missing values would otherwise serialize as a missing field in
+    // JSON.stringify, leading Meta to flag "Add an event_id parameter" in
+    // Events Manager → Diagnostics.
+    const eventId = (event.eventId ?? '').toString().trim();
+    if (!eventId) {
+      return { ok: false, error: `[${event.eventName}] Refusing to send Meta CAPI event without event_id (would break dedup)` };
+    }
+
     const user_data: Record<string, unknown> = {};
     const em = hashIfPresent(event.userData.email);
     const ph = hashPhone(event.userData.phone);
@@ -86,7 +95,7 @@ export async function sendMetaCapiEvent(event: MetaCapiEvent): Promise<CapiResul
       data: [
         {
           event_name: event.eventName,
-          event_id: event.eventId,
+          event_id: eventId,                                   // guaranteed non-empty (validated above)
           event_time: event.eventTime ?? Math.floor(Date.now() / 1000),
           event_source_url: event.eventSourceUrl,
           action_source: event.actionSource ?? 'website',
@@ -107,7 +116,7 @@ export async function sendMetaCapiEvent(event: MetaCapiEvent): Promise<CapiResul
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
-      return { ok: false, error: `Meta CAPI ${res.status}: ${body.slice(0, 300)}` };
+      return { ok: false, error: `Meta CAPI ${res.status} for ${event.eventName} (event_id=${eventId.slice(0, 12)}…): ${body.slice(0, 300)}` };
     }
 
     const data = await res.json().catch(() => ({}));
