@@ -77,6 +77,12 @@ export default function RootLayout({
                 t.src=v;s=b.getElementsByTagName(e)[0];
                 s.parentNode.insertBefore(t,s)}(window, document,'script',
                 'https://connect.facebook.net/en_US/fbevents.js');
+                // Disable Meta's automatic event detection BEFORE init.
+                // Without this, fbevents.js auto-fires CompleteRegistration /
+                // Lead / SubscribedButtonClick on pages whose URL or copy
+                // matches its heuristics — and those auto-fired events have
+                // no event_id, breaking server↔browser deduplication.
+                fbq('set', 'autoConfig', false, '${META_PIXEL_ID}');
                 fbq('init', '${META_PIXEL_ID}');
                 fbq('track', 'PageView');
               `,
