@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { addRegistration } from '@/lib/db';
+import { addRegistration, markRegistrationVerified } from '@/lib/db';
 import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
 
 function requireEnv(name: string): string {
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     const hmacSecret = requireEnv('OTP_HMAC_SECRET');
     if (hmacSecret.length < 32) throw new Error('OTP_HMAC_SECRET must be at least 32 chars');
     const decoded = JSON.parse(Buffer.from(token, 'base64').toString('utf8'));
-    const { expiry, hmac, fullName, email, phone, city, zoomJoinUrl } = decoded;
+    const { expiry, hmac, fullName, email, phone, city, zoomJoinUrl, registrationId } = decoded;
 
     // 1. Check Expiry
     if (Date.now() > expiry) {
@@ -59,14 +59,21 @@ export async function POST(req: NextRequest) {
     // 3. Update External Systems
     await updateLeadSquaredToVerified(phone);
 
-    // 4. Save to Local DB (for Admin Portal)
-    await addRegistration({
+    // 4. Save to Local DB (for Admin Portal). If the send route already
+    // inserted an Unverified row, just promote it to Verified. Otherwise
+    // insert a fresh Verified row as a fallback (handles old tokens).
+    const verifiedPayload = {
       fullName,
       email,
       phone,
-      status: decoded.status || 'Verified',
-      city
-    });
+      status: 'Verified',
+      city,
+    };
+    if (registrationId && typeof registrationId === 'string') {
+      await markRegistrationVerified(registrationId, verifiedPayload);
+    } else {
+      await addRegistration(verifiedPayload);
+    }
 
     // 5. Fire Meta CAPI CompleteRegistration (deduped against browser pixel via eventId)
     const { ip, userAgent } = extractClientContext(req);

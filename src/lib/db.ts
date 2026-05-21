@@ -603,9 +603,9 @@ export async function getRegistrations(): Promise<Registration[]> {
 }
 
 /**
- * Returns an existing registration matching `email` (case-insensitive) OR `phone`.
- * Used to prevent duplicate signups before any external systems (WhatsApp, Zoom,
- * LeadSquared) are called.
+ * Returns an existing VERIFIED registration matching `email` (case-insensitive)
+ * OR `phone`. Used to prevent duplicate completed signups. Unverified rows are
+ * intentionally ignored so users can retry the OTP step.
  */
 export async function findRegistrationByEmailOrPhone(
   email: string,
@@ -619,10 +619,10 @@ export async function findRegistrationByEmailOrPhone(
     const supabase = client();
     const [byEmail, byPhone] = await Promise.all([
       normEmail
-        ? supabase.from('registrations').select('*').ilike('email', normEmail).limit(1)
+        ? supabase.from('registrations').select('*').ilike('email', normEmail).eq('status', 'Verified').limit(1)
         : Promise.resolve({ data: null, error: null }),
       normPhone
-        ? supabase.from('registrations').select('*').eq('phone', normPhone).limit(1)
+        ? supabase.from('registrations').select('*').eq('phone', normPhone).eq('status', 'Verified').limit(1)
         : Promise.resolve({ data: null, error: null }),
     ]);
     if (byEmail.error) throw byEmail.error;
@@ -632,6 +632,122 @@ export async function findRegistrationByEmailOrPhone(
   } catch (err) {
     console.error('[db.findRegistrationByEmailOrPhone]', err);
     return null;
+  }
+}
+
+/**
+ * Inserts an unverified lead. Returns the new registration's id so the caller
+ * can embed it in the OTP token and later mark it verified.
+ */
+export async function addUnverifiedRegistration(
+  reg: Omit<Registration, 'id' | 'createdAt' | 'status'>,
+): Promise<Registration> {
+  const row: RegistrationRow = {
+    id: shortId(),
+    full_name: reg.fullName,
+    email: reg.email,
+    phone: reg.phone,
+    status: 'Unverified',
+    city: reg.city,
+    created_at: new Date().toISOString(),
+  };
+  const { error } = await client().from('registrations').insert(row);
+  if (error) throw error;
+  return mapRegistration(row);
+}
+
+/**
+ * Promotes an unverified registration row to verified. If `id` matches no row
+ * (legacy token / DB cleanup), falls back to inserting a new verified row so
+ * we never lose the completion event.
+ */
+export async function markRegistrationVerified(
+  id: string,
+  reg: Omit<Registration, 'id' | 'createdAt'>,
+): Promise<Registration> {
+  const supabase = client();
+  const { data, error } = await supabase
+    .from('registrations')
+    .update({ status: 'Verified' })
+    .eq('id', id)
+    .select()
+    .maybeSingle<RegistrationRow>();
+  if (error) throw error;
+  if (data) return mapRegistration(data);
+  // Fallback: row not found (old token from before this refactor)
+  return addRegistration(reg);
+}
+
+export type RegistrationStats = {
+  total: number;
+  verified: number;
+  unverified: number;
+  uniqueEmailsStarted: number;
+  uniqueEmailsVerified: number;
+};
+
+export async function getRegistrationStats(): Promise<RegistrationStats> {
+  try {
+    const supabase = client();
+    // Two count queries — fast even on large tables thanks to the index.
+    const [totalRes, verifiedRes, unverifiedRes, allEmailsRes, verifiedEmailsRes] = await Promise.all([
+      supabase.from('registrations').select('*', { count: 'exact', head: true }),
+      supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Verified'),
+      supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Unverified'),
+      supabase.from('registrations').select('email'),
+      supabase.from('registrations').select('email').eq('status', 'Verified'),
+    ]);
+    if (totalRes.error) throw totalRes.error;
+    if (verifiedRes.error) throw verifiedRes.error;
+    if (unverifiedRes.error) throw unverifiedRes.error;
+
+    const uniqueEmailsStarted = new Set((allEmailsRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size;
+    const uniqueEmailsVerified = new Set((verifiedEmailsRes.data ?? []).map((r: { email: string }) => r.email.toLowerCase())).size;
+
+    return {
+      total: totalRes.count ?? 0,
+      verified: verifiedRes.count ?? 0,
+      unverified: unverifiedRes.count ?? 0,
+      uniqueEmailsStarted,
+      uniqueEmailsVerified,
+    };
+  } catch (err) {
+    console.error('[db.getRegistrationStats]', err);
+    return { total: 0, verified: 0, unverified: 0, uniqueEmailsStarted: 0, uniqueEmailsVerified: 0 };
+  }
+}
+
+export type RegistrationsPage = {
+  data: Registration[];
+  total: number;
+  page: number;
+  pageSize: number;
+};
+
+export async function getRegistrationsPaginated(
+  page: number = 1,
+  pageSize: number = 50,
+): Promise<RegistrationsPage> {
+  const safePage = Math.max(1, Math.floor(page));
+  const safeSize = Math.max(1, Math.min(200, Math.floor(pageSize)));
+  const from = (safePage - 1) * safeSize;
+  const to = from + safeSize - 1;
+  try {
+    const { data, error, count } = await client()
+      .from('registrations')
+      .select('*', { count: 'exact' })
+      .order('created_at', { ascending: false })
+      .range(from, to);
+    if (error) throw error;
+    return {
+      data: (data ?? []).map(mapRegistration),
+      total: count ?? 0,
+      page: safePage,
+      pageSize: safeSize,
+    };
+  } catch (err) {
+    console.error('[db.getRegistrationsPaginated]', err);
+    return { data: [], total: 0, page: safePage, pageSize: safeSize };
   }
 }
 

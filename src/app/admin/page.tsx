@@ -88,6 +88,10 @@ export default function AdminPortal() {
   // Registrations State
   const [registrations, setRegistrations] = useState<any[]>([]);
   const [isLoadingRegs, setIsLoadingRegs] = useState(false);
+  const [regPage, setRegPage] = useState(1);
+  const [regPageSize, setRegPageSize] = useState(50);
+  const [regTotal, setRegTotal] = useState(0);
+  const [regStats, setRegStats] = useState<{ total: number; verified: number; unverified: number; uniqueEmailsStarted: number; uniqueEmailsVerified: number } | null>(null);
 
   // FAQs State
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
@@ -118,14 +122,17 @@ export default function AdminPortal() {
     fetch('/api/settings').then(res => res.json()).then(data => setSettings(data));
   }, []);
 
-  const loadRegistrations = () => {
+  const loadRegistrations = (page = regPage, pageSize = regPageSize) => {
     setIsLoadingRegs(true);
-    fetch('/api/register')
+    fetch(`/api/register?page=${page}&pageSize=${pageSize}&stats=1`)
       .then(res => res.json())
-      .then(data => {
-        setRegistrations(data);
+      .then((res: { data: any[]; total: number; stats?: typeof regStats }) => {
+        setRegistrations(Array.isArray(res?.data) ? res.data : []);
+        setRegTotal(typeof res?.total === 'number' ? res.total : 0);
+        if (res?.stats) setRegStats(res.stats);
         setIsLoadingRegs(false);
-      });
+      })
+      .catch(() => setIsLoadingRegs(false));
   };
 
   const loadFaqs = () => {
@@ -185,12 +192,13 @@ export default function AdminPortal() {
   };
 
   useEffect(() => {
-    if (activeTab === "registrations") loadRegistrations();
+    if (activeTab === "registrations") loadRegistrations(regPage, regPageSize);
     if (activeTab === "faqs") loadFaqs();
     if (activeTab === "webinar") loadWebinar();
     if (activeTab === "features") loadFeatures();
     if (activeTab === "agenda") loadAgenda();
-  }, [activeTab]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, regPage, regPageSize]);
 
   // ─── Webinar config handlers ─────────────────────────────────────────────
   const updateWebinarField = <K extends keyof WebinarConfig>(field: K, value: WebinarConfig[K]) => {
@@ -548,10 +556,21 @@ export default function AdminPortal() {
             <div>
               <div className="flex items-center justify-between mb-6">
                 <h2 className="text-lg font-bold text-[#003368]">Student Registrations</h2>
-                <button onClick={loadRegistrations} className="text-sm text-[#003368] font-semibold hover:underline">
+                <button onClick={() => loadRegistrations(regPage, regPageSize)} className="text-sm text-[#003368] font-semibold hover:underline">
                   Refresh Data
                 </button>
               </div>
+
+              {/* Stats summary */}
+              {regStats && (
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+                  <StatCard label="Total rows" value={regStats.total} hint="Every form submission attempt" />
+                  <StatCard label="OTP verified" value={regStats.verified} tone="green" hint="Completed registration" />
+                  <StatCard label="OTP not submitted" value={regStats.unverified} tone="red" hint="Started but didn't verify" />
+                  <StatCard label="Unique people started" value={regStats.uniqueEmailsStarted} hint="Distinct emails" />
+                  <StatCard label="Unique people verified" value={regStats.uniqueEmailsVerified} tone="green" hint="Distinct verified emails" />
+                </div>
+              )}
 
               {isLoadingRegs ? (
                 <div className="py-12 flex justify-center"><Loader2 className="w-8 h-8 text-[#00DF83] animate-spin" /></div>
@@ -560,36 +579,82 @@ export default function AdminPortal() {
                   No registrations found.
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-lg border border-slate-200">
-                  <table className="w-full text-left text-sm whitespace-nowrap">
-                    <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
-                      <tr>
-                        <th className="px-6 py-3 font-semibold">Date</th>
-                        <th className="px-6 py-3 font-semibold">Name</th>
-                        <th className="px-6 py-3 font-semibold">Email</th>
-                        <th className="px-6 py-3 font-semibold">Phone</th>
-                        <th className="px-6 py-3 font-semibold">Status</th>
-                        <th className="px-6 py-3 font-semibold">City</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {registrations.map(reg => (
-                        <tr key={reg.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 text-slate-500">{new Date(reg.createdAt).toLocaleString()}</td>
-                          <td className="px-6 py-4 font-medium text-[#003368]">{reg.fullName}</td>
-                          <td className="px-6 py-4 text-slate-600">{reg.email}</td>
-                          <td className="px-6 py-4 text-slate-600">{reg.phone}</td>
-                          <td className="px-6 py-4">
-                            <span className="bg-[#00DF83]/10 text-[#003368] px-2.5 py-1 rounded-full text-xs font-semibold">
-                              {reg.status}
-                            </span>
-                          </td>
-                          <td className="px-6 py-4 text-slate-600">{reg.city || '-'}</td>
+                <>
+                  <div className="overflow-x-auto rounded-lg border border-slate-200">
+                    <table className="w-full text-left text-sm whitespace-nowrap">
+                      <thead className="bg-slate-50 border-b border-slate-200 text-slate-600">
+                        <tr>
+                          <th className="px-6 py-3 font-semibold">Date</th>
+                          <th className="px-6 py-3 font-semibold">Name</th>
+                          <th className="px-6 py-3 font-semibold">Email</th>
+                          <th className="px-6 py-3 font-semibold">Phone</th>
+                          <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold">City</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {registrations.map(reg => (
+                          <tr key={reg.id} className="hover:bg-slate-50 transition-colors">
+                            <td className="px-6 py-4 text-slate-500">{new Date(reg.createdAt).toLocaleString()}</td>
+                            <td className="px-6 py-4 font-medium text-[#003368]">{reg.fullName}</td>
+                            <td className="px-6 py-4 text-slate-600">{reg.email}</td>
+                            <td className="px-6 py-4 text-slate-600">{reg.phone}</td>
+                            <td className="px-6 py-4">
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${reg.status === 'Verified' ? 'bg-[#00DF83]/10 text-[#003368]' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                {reg.status}
+                              </span>
+                            </td>
+                            <td className="px-6 py-4 text-slate-600">{reg.city || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Pagination */}
+                  <div className="flex items-center justify-between mt-4 text-sm">
+                    <div className="text-slate-500">
+                      Showing <span className="font-semibold text-[#003368]">{(regPage - 1) * regPageSize + 1}</span>–
+                      <span className="font-semibold text-[#003368]">{Math.min(regPage * regPageSize, regTotal)}</span> of{' '}
+                      <span className="font-semibold text-[#003368]">{regTotal}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <label className="flex items-center gap-2 text-slate-500">
+                        Page size
+                        <select
+                          value={regPageSize}
+                          onChange={e => { setRegPage(1); setRegPageSize(parseInt(e.target.value, 10)); }}
+                          className="border border-slate-300 rounded-md px-2 py-1 text-sm bg-white"
+                        >
+                          <option value={25}>25</option>
+                          <option value={50}>50</option>
+                          <option value={100}>100</option>
+                          <option value={200}>200</option>
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setRegPage(p => Math.max(1, p - 1))}
+                        disabled={regPage === 1 || isLoadingRegs}
+                        className="px-3 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                      >
+                        ← Prev
+                      </button>
+                      <span className="text-slate-500">
+                        Page <span className="font-semibold text-[#003368]">{regPage}</span> of{' '}
+                        <span className="font-semibold text-[#003368]">{Math.max(1, Math.ceil(regTotal / regPageSize))}</span>
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setRegPage(p => p + 1)}
+                        disabled={regPage * regPageSize >= regTotal || isLoadingRegs}
+                        className="px-3 py-1.5 rounded-md border border-slate-300 bg-white text-slate-700 disabled:opacity-40 disabled:cursor-not-allowed hover:bg-slate-50"
+                      >
+                        Next →
+                      </button>
+                    </div>
+                  </div>
+                </>
               )}
             </div>
           )}
@@ -1118,6 +1183,26 @@ export default function AdminPortal() {
 }
 
 // ─── Small UI helpers for the Webinar tab ───────────────────────────────────
+
+function StatCard({ label, value, hint, tone }: { label: string; value: number; hint?: string; tone?: 'green' | 'red' }) {
+  const valueColor = tone === 'green'
+    ? 'text-[#00875A]'
+    : tone === 'red'
+      ? 'text-red-600'
+      : 'text-[#003368]';
+  const borderColor = tone === 'green'
+    ? 'border-[#00DF83]/30 bg-[#00DF83]/5'
+    : tone === 'red'
+      ? 'border-red-200 bg-red-50'
+      : 'border-slate-200 bg-white';
+  return (
+    <div className={`rounded-xl border ${borderColor} p-4`}>
+      <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{label}</div>
+      <div className={`text-2xl font-extrabold mt-1 tabular-nums ${valueColor}`}>{value.toLocaleString()}</div>
+      {hint && <div className="text-[11px] text-slate-400 mt-1">{hint}</div>}
+    </div>
+  );
+}
 
 function WebinarSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (

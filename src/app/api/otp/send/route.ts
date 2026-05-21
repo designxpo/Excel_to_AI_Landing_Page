@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/zoom';
 import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
-import { findRegistrationByEmailOrPhone, getWebinarConfig } from '@/lib/db';
+import { findRegistrationByEmailOrPhone, getWebinarConfig, addUnverifiedRegistration } from '@/lib/db';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -180,10 +180,23 @@ export async function POST(req: NextRequest) {
       console.error('[Zoom] Sync failed:', zoomResult.error);
     }
 
-    // 3. Build OTP token (now includes Zoom URL so /verify can return it to client)
+    // 3. Insert Unverified registration row. We get back its id so /verify
+    // can promote the same row to 'Verified' rather than inserting a duplicate.
+    let registrationId: string | null = null;
+    try {
+      const created = await addUnverifiedRegistration({ fullName, email, phone, city });
+      registrationId = created.id;
+    } catch (regErr) {
+      console.error('[Registrations] Failed to insert unverified row:', regErr);
+      // Non-fatal — the OTP flow continues; verify will fall back to insert.
+    }
+
+    // 4. Build OTP token (includes Zoom URL + registration id so /verify can
+    // return Zoom URL to client AND mark the same row as Verified).
     const token = Buffer.from(JSON.stringify({
       expiry, hmac, fullName, email, phone, city, typeFilter,
       zoomJoinUrl,
+      registrationId,
     })).toString('base64');
 
     // 4. LeadSquared submission

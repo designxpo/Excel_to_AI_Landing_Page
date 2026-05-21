@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { addRegistration, getRegistrations } from '@/lib/db';
+import { addRegistration, getRegistrationsPaginated, getRegistrationStats } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 
 async function requireAdmin(): Promise<boolean> {
@@ -9,11 +9,24 @@ async function requireAdmin(): Promise<boolean> {
   return session !== null;
 }
 
-export async function GET() {
+export async function GET(request: Request) {
   if (!(await requireAdmin())) {
     return new NextResponse('Unauthorized', { status: 401 });
   }
-  return NextResponse.json(await getRegistrations());
+  const url = new URL(request.url);
+  const page = parseInt(url.searchParams.get('page') ?? '1', 10) || 1;
+  const pageSize = parseInt(url.searchParams.get('pageSize') ?? '50', 10) || 50;
+  const wantStats = url.searchParams.get('stats') === '1';
+
+  const [pageRes, stats] = await Promise.all([
+    getRegistrationsPaginated(page, pageSize),
+    wantStats ? getRegistrationStats() : Promise.resolve(null),
+  ]);
+
+  return NextResponse.json({
+    ...pageRes,
+    ...(stats ? { stats } : {}),
+  });
 }
 
 export async function POST(request: Request) {
