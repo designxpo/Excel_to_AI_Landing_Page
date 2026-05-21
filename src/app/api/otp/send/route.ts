@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/zoom';
-import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
+// Meta CAPI is now sent by Stape (server-side GTM). We only generate the
+// event_id here and return it to the client so the browser pixel and Stape
+// use the same id for dedup.
 import { findRegistrationByEmailOrPhone, getWebinarConfig, addUnverifiedRegistration } from '@/lib/db';
 
 function requireEnv(name: string): string {
@@ -226,8 +228,7 @@ export async function POST(req: NextRequest) {
       { Attribute: notesFieldName, Value: notesBlob },
     ];
 
-    // 5. Push to LSQ + Sheets + Meta CAPI in parallel (all fire-and-forget; failures logged but don't block)
-    const { ip, userAgent } = extractClientContext(req);
+    // 5. Push to LSQ + Sheets in parallel (Meta CAPI handled by Stape).
     const leadEventId: string = (body.eventId && typeof body.eventId === 'string')
       ? body.eventId
       : crypto.randomUUID();
@@ -241,30 +242,6 @@ export async function POST(req: NextRequest) {
         if (!res.ok) console.error('[LSQ] Capture failed:', res.status);
       }),
       pushToGoogleSheets(body, phone, otpStatus, zoomJoinUrl, zoomSyncStatus),
-      sendMetaCapiEvent({
-        eventName: 'Lead',
-        eventId: leadEventId,
-        eventSourceUrl: body.landingPageUrl,
-        userData: {
-          email,
-          phone,
-          firstName,
-          lastName,
-          city,
-          country: 'in',
-          clientIp: ip,
-          clientUserAgent: userAgent,
-          fbp: body.fbp,
-          fbc: body.fbc,
-          externalId: email,
-        },
-        customData: {
-          source: typeFilter || config?.lsqSourceName?.trim() || 'PPC_Masterclass',
-          gclid: body.gclid || undefined,
-        },
-      }).then(result => {
-        if (!result.ok) console.error('[Meta CAPI Lead] Failed:', result.error);
-      }),
     ]);
 
     return NextResponse.json({

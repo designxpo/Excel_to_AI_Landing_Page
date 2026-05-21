@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
 import { addRegistration, markRegistrationVerified } from '@/lib/db';
-import { sendMetaCapiEvent, extractClientContext } from '@/lib/meta';
+// Meta CAPI is now sent by Stape (server-side GTM). We only generate the
+// event_id here and return it to the client so the browser pixel and Stape
+// use the same id for dedup.
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -34,7 +36,7 @@ async function updateLeadSquaredToVerified(phone: string) {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { token, otp_entered, eventId: incomingEventId, fbp, fbc, landingPageUrl } = body;
+    const { token, otp_entered, eventId: incomingEventId } = body;
 
     if (!token || !otp_entered) {
       return NextResponse.json({ success: false, error: 'Missing parameters' }, { status: 400 });
@@ -75,44 +77,11 @@ export async function POST(req: NextRequest) {
       await addRegistration(verifiedPayload);
     }
 
-    // 5. Fire Meta CAPI CompleteRegistration (deduped against browser pixel via eventId)
-    const { ip, userAgent } = extractClientContext(req);
-    const nameParts = (fullName || '').split(' ').filter(Boolean);
-    const firstName = nameParts[0] || fullName || '';
-    const lastName = nameParts.slice(1).join(' ');
+    // 5. Generate / echo back the event_id so the browser pixel and Stape
+    // use the same id for CompleteRegistration deduplication.
     const completeEventId: string = (typeof incomingEventId === 'string' && incomingEventId)
       ? incomingEventId
       : crypto.randomUUID();
-
-    // Awaited (not fire-and-forget) — on Vercel serverless, the function
-    // instance terminates immediately after the response is returned, which
-    // can kill an unawaited Promise before the CAPI fetch completes.
-    try {
-      const result = await sendMetaCapiEvent({
-        eventName: 'CompleteRegistration',
-        eventId: completeEventId,
-        eventSourceUrl: landingPageUrl,
-        userData: {
-          email,
-          phone,
-          firstName,
-          lastName,
-          city,
-          country: 'in',
-          clientIp: ip,
-          clientUserAgent: userAgent,
-          fbp,
-          fbc,
-          externalId: email,
-        },
-        customData: {
-          status: 'Verified',
-        },
-      });
-      if (!result.ok) console.error('[Meta CAPI CompleteRegistration] Failed:', result.error);
-    } catch (err) {
-      console.error('[Meta CAPI CompleteRegistration] Threw:', err);
-    }
 
     return NextResponse.json({
       success: true,
