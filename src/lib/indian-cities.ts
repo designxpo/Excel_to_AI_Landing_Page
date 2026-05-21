@@ -46,11 +46,18 @@ export const INDIAN_CITIES: readonly string[] = [
  *   • No leading/trailing spaces (we trim first)
  *   • No three identical characters in a row ("aaa", "xxx") — catches "asdasd" / "qwerty" style garbage
  */
+const CITY_BLOCKLIST = new Set([
+  'test', 'demo', 'fake', 'dummy', 'asdf', 'asdasd', 'qwerty', 'abc', 'xyz',
+  'city', 'town', 'na', 'n/a', 'none', 'unknown', 'india',
+]);
+
 export function isValidCity(input: string): boolean {
   const v = (input ?? '').trim();
   if (v.length < 3) return false;
-  if (!/[A-Za-zऀ-ॿ]/.test(v)) return false; // must contain at least one letter (Latin or Devanagari)
-  if (!/^[\p{L} '\-.]+$/u.test(v)) return false;       // only letters/spaces/hyphens/apostrophes/dots
-  if (/(.)\1{2,}/.test(v)) return false;               // reject "aaa", "qqq", etc.
+  if (!/[\p{L}]/u.test(v)) return false;                  // must contain at least one Unicode letter
+  if (!/^[\p{L}\p{M} '\-.]+$/u.test(v)) return false;     // letters + combining marks + spaces + hyphens + apostrophes + dots
+  if (/(.)\1{2,}/.test(v)) return false;                  // reject "aaa", "qqq", etc.
+  if (/\d/.test(v)) return false;                         // no digits
+  if (CITY_BLOCKLIST.has(v.toLowerCase())) return false;  // reject obvious placeholder text
   return true;
 }

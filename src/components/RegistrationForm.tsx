@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Loader2, ArrowLeft, CheckCircle2, Phone, User, Mail, MapPin, Briefcase, Megaphone } from "lucide-react";
 import { initBehaviourTracking, getBehaviourSnapshot } from "@/utils/trackBehaviour";
 import { INDIAN_CITIES, isValidCity } from "@/lib/indian-cities";
+import { validateName, validateEmail, validatePhone, normalizeEmail, normalizePhone } from "@/lib/form-validation";
 
 export interface RegistrationFormCopy {
   labelName?: string | null;
@@ -148,14 +149,30 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
 
   const handleInitialSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!/^[6-9]\d{9}$/.test(formData.phone)) {
-      setError("Please enter a valid 10-digit phone number.");
-      return;
-    }
+
+    // Per-field validation. First failure wins so the user sees one clear error.
+    const nameErr  = validateName(formData.fullName);   if (nameErr)  { setError(nameErr);  return; }
+    const emailErr = validateEmail(formData.email);     if (emailErr) { setError(emailErr); return; }
+    const phoneErr = validatePhone(formData.phone);     if (phoneErr) { setError(phoneErr); return; }
+    if (!formData.status)         { setError('Please select your current status.');   return; }
     if (!isValidCity(formData.city)) {
-      setError("Please enter your real city name (letters only, at least 3 characters).");
+      setError('Please enter your real city name (letters only, at least 3 characters).');
       return;
     }
+    if (!formData.referralSource) { setError('Please tell us how you heard about this masterclass.'); return; }
+
+    // Normalize sanitized values before submit.
+    const normalizedName  = formData.fullName.trim().replace(/\s+/g, ' ');
+    const normalizedEmail = normalizeEmail(formData.email);
+    const normalizedPhone = normalizePhone(formData.phone);
+    const normalizedCity  = formData.city.trim().replace(/\s+/g, ' ');
+    setFormData(prev => ({
+      ...prev,
+      fullName: normalizedName,
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      city: normalizedCity,
+    }));
 
     setIsLoading(true);
     setError("");
@@ -171,6 +188,10 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...formData,
+          fullName: normalizedName,
+          email: normalizedEmail,
+          phone: normalizedPhone,
+          city: normalizedCity,
           ...utmRef.current,
           gclid: gclidRef.current,
           typeFilter,
@@ -310,15 +331,55 @@ export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: 
       <div className="grid grid-cols-1 gap-4">
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><User className="w-3 h-3" /> {labelName}</label>
-          <input type="text" name="fullName" required value={formData.fullName} onChange={handleInputChange} placeholder={phName} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <input
+            type="text"
+            name="fullName"
+            required
+            minLength={2}
+            maxLength={80}
+            pattern="[\p{L} '\-.]{2,80}"
+            autoComplete="name"
+            value={formData.fullName}
+            onChange={handleInputChange}
+            placeholder={phName}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50"
+          />
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Mail className="w-3 h-3" /> {labelEmail}</label>
-          <input type="email" name="email" required value={formData.email} onChange={handleInputChange} placeholder={phEmail} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <input
+            type="email"
+            name="email"
+            required
+            maxLength={254}
+            autoComplete="email"
+            inputMode="email"
+            value={formData.email}
+            onChange={handleInputChange}
+            placeholder={phEmail}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50"
+          />
         </div>
         <div>
           <label className="text-[10px] font-bold uppercase text-slate-400 mb-1 flex items-center gap-1.5"><Phone className="w-3 h-3" /> {labelPhone}</label>
-          <input type="tel" name="phone" required maxLength={10} value={formData.phone} onChange={handleInputChange} placeholder={phPhone} className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50" />
+          <input
+            type="tel"
+            name="phone"
+            required
+            maxLength={10}
+            pattern="[6-9][0-9]{9}"
+            inputMode="numeric"
+            autoComplete="tel-national"
+            value={formData.phone}
+            onChange={(e) => {
+              // Strip non-digits as user types so they can't accidentally enter letters / spaces / +91
+              const digits = e.target.value.replace(/\D/g, '').slice(0, 10);
+              setFormData(prev => ({ ...prev, phone: digits }));
+              if (error) setError("");
+            }}
+            placeholder={phPhone}
+            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm bg-gray-50/50"
+          />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
