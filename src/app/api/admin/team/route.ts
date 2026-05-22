@@ -24,6 +24,16 @@ function generatePassword(length = 20): string {
 }
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
+
+function validateProvidedPassword(value: unknown): string | { error: string } {
+  if (typeof value !== 'string') return { error: 'Password must be a string' };
+  if (value.length < PASSWORD_MIN) return { error: `Password must be at least ${PASSWORD_MIN} characters` };
+  if (value.length > PASSWORD_MAX) return { error: `Password must be at most ${PASSWORD_MAX} characters` };
+  if (/^\s|\s$/.test(value)) return { error: 'Password cannot start or end with a space' };
+  return value;
+}
 
 export async function GET() {
   const auth = await requireAdmin();
@@ -58,7 +68,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'An admin with this email already exists' }, { status: 409 });
     }
 
-    const password = generatePassword(20);
+    // Caller may supply their own password; otherwise we generate one.
+    let password: string;
+    let userProvided = false;
+    if (body.password !== undefined && body.password !== '') {
+      const result = validateProvidedPassword(body.password);
+      if (typeof result !== 'string') {
+        return NextResponse.json({ error: result.error }, { status: 400 });
+      }
+      password = result;
+      userProvided = true;
+    } else {
+      password = generatePassword(20);
+    }
+
     const passwordHash = await bcrypt.hash(password, 10);
     const created = await createAdminUser({
       email,
@@ -67,8 +90,12 @@ export async function POST(request: Request) {
       createdBy: auth.sub,
     });
 
-    // Password is returned ONCE here. We never store the plaintext.
-    return NextResponse.json({ admin: created, password });
+    // If the caller supplied the password themselves, they already know it —
+    // omit it from the response so the UI doesn't echo it back in a modal.
+    return NextResponse.json({
+      admin: created,
+      password: userProvided ? null : password,
+    });
   } catch (err) {
     console.error('[Team POST] error:', err);
     return NextResponse.json({ error: 'Failed to create admin' }, { status: 500 });

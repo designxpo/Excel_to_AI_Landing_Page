@@ -26,6 +26,17 @@ function generatePassword(length = 20): string {
     .slice(0, length);
 }
 
+const PASSWORD_MIN = 8;
+const PASSWORD_MAX = 128;
+
+function validateProvidedPassword(value: unknown): string | { error: string } {
+  if (typeof value !== 'string') return { error: 'Password must be a string' };
+  if (value.length < PASSWORD_MIN) return { error: `Password must be at least ${PASSWORD_MIN} characters` };
+  if (value.length > PASSWORD_MAX) return { error: `Password must be at most ${PASSWORD_MAX} characters` };
+  if (/^\s|\s$/.test(value)) return { error: 'Password cannot start or end with a space' };
+  return value;
+}
+
 // Returns the row whose id matches, or null. We don't expose the hash here.
 async function findById(id: string) {
   const all = await listAdminUsers();
@@ -65,10 +76,25 @@ export async function PATCH(
     }
 
     if (action === 'reset_password') {
-      const password = generatePassword(20);
+      // Caller may supply a custom new password; otherwise we generate one.
+      let password: string;
+      let userProvided = false;
+      if (body.password !== undefined && body.password !== '') {
+        const result = validateProvidedPassword(body.password);
+        if (typeof result !== 'string') {
+          return NextResponse.json({ error: result.error }, { status: 400 });
+        }
+        password = result;
+        userProvided = true;
+      } else {
+        password = generatePassword(20);
+      }
       const passwordHash = await bcrypt.hash(password, 10);
       const updated = await updateAdminUser(id, { passwordHash });
-      return NextResponse.json({ admin: updated, password });
+      return NextResponse.json({
+        admin: updated,
+        password: userProvided ? null : password,
+      });
     }
 
     if (action === 'rename') {

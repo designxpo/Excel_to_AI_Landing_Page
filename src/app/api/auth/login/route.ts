@@ -83,12 +83,18 @@ export async function POST(request: Request) {
         const passOk = timingSafeEqualStr(password, cred.password);
         if (userOk && passOk) matchedUser = cred.user;
       }
-      // If env login succeeded and the table is empty (first time), seed the
-      // table with this credential so it becomes the bootstrap admin.
+      // On a successful env-cred login, ensure the user has a DB row so they
+      // can manage themselves from the portal (change their password, etc.).
+      // This runs on every env login — not just the first — so removing
+      // someone from `ADMIN_CREDENTIALS` is the only way to truly revoke
+      // env-based access. Existing DB rows are left alone (we don't overwrite
+      // a password the user may have already customised through the portal).
       if (matchedUser) {
         try {
-          const total = await countAdminUsers();
-          if (total === 0) {
+          const existing = await getAdminByEmailActive(matchedUser).catch(() => null);
+          if (existing) {
+            matchedAdminId = existing.id;
+          } else {
             const hash = await bcrypt.hash(password, 10);
             const created = await createAdminUser({
               email: matchedUser,
@@ -97,7 +103,10 @@ export async function POST(request: Request) {
               createdBy: 'env-bootstrap',
             });
             matchedAdminId = created.id;
-            console.log(`[Login] Bootstrapped admin_users from env: ${matchedUser}`);
+            const total = await countAdminUsers().catch(() => -1);
+            console.log(
+              `[Login] Promoted env credential to admin_users: ${matchedUser} (table size: ${total})`,
+            );
           }
         } catch (err) {
           console.error('[Login] Bootstrap into admin_users failed (login still succeeded):', err);

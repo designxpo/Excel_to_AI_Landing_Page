@@ -10,7 +10,7 @@ const poppins = Poppins({
   subsets: ["latin"],
 });
 
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://careersuccess.analytixlabs.co.in';
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://masterclass.analytixlabs.co.in';
 const FALLBACK_TITLE = "From Excel to AI — Inside the Data Analyst & Data Scientist Workflow";
 const FALLBACK_DESCRIPTION = "Join our free 90-minute live session to learn how data analysts and scientists use Python and AI in 2026. Beginner-safe.";
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
