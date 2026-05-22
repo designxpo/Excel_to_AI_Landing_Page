@@ -3,10 +3,35 @@ import crypto from 'crypto';
 import { signAdminSession } from '@/lib/auth';
 import { assertSameOrigin } from '@/lib/security';
 
-function requireEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
+type AdminCredential = { user: string; password: string };
+
+// Load the full list of admin credentials. Supports two formats:
+//   1. ADMIN_CREDENTIALS — JSON array: [{"user":"a","password":"b"}, ...]
+//   2. Legacy ADMIN_USER + ADMIN_PASSWORD — single credential
+// Both may coexist; entries are merged and de-duplicated by user.
+function loadAdminCredentials(): AdminCredential[] {
+  const list: AdminCredential[] = [];
+  const raw = process.env.ADMIN_CREDENTIALS;
+  if (raw) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && typeof item.user === 'string' && typeof item.password === 'string') {
+            list.push({ user: item.user, password: item.password });
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[Login] ADMIN_CREDENTIALS is not valid JSON:', err);
+    }
+  }
+  const legacyUser = process.env.ADMIN_USER;
+  const legacyPass = process.env.ADMIN_PASSWORD;
+  if (legacyUser && legacyPass && !list.some((c) => c.user === legacyUser)) {
+    list.push({ user: legacyUser, password: legacyPass });
+  }
+  return list;
 }
 
 function timingSafeEqualStr(a: string, b: string): boolean {
@@ -29,18 +54,25 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Bad request' }, { status: 400 });
     }
 
-    const validUser = requireEnv('ADMIN_USER');
-    const validPassword = requireEnv('ADMIN_PASSWORD');
+    const credentials = loadAdminCredentials();
+    if (credentials.length === 0) {
+      throw new Error('No admin credentials configured (set ADMIN_CREDENTIALS or ADMIN_USER/ADMIN_PASSWORD)');
+    }
 
-    const userOk = timingSafeEqualStr(username, validUser);
-    const passOk = timingSafeEqualStr(password, validPassword);
+    // Check every credential without short-circuiting to keep timing uniform.
+    let matched: AdminCredential | null = null;
+    for (const cred of credentials) {
+      const userOk = timingSafeEqualStr(username, cred.user);
+      const passOk = timingSafeEqualStr(password, cred.password);
+      if (userOk && passOk) matched = cred;
+    }
 
-    if (!userOk || !passOk) {
+    if (!matched) {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
 
     const ttlSeconds = 60 * 60 * 24;
-    const token = await signAdminSession(validUser, ttlSeconds);
+    const token = await signAdminSession(matched.user, ttlSeconds);
 
     const response = NextResponse.json({ success: true });
     response.cookies.set({
