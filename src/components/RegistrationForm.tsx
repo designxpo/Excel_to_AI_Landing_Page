@@ -55,7 +55,7 @@ function newEventId(): string {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function RegistrationForm({ typeFilter = "ppc_masterclass", copy = {} }: RegistrationFormProps) {
+export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: RegistrationFormProps) {
   // Resolve copy with hardcoded fallbacks matching the original page.
   const labelName     = copy.labelName     ?? 'Full Name';
   const labelEmail    = copy.labelEmail    ?? 'Email';

@@ -822,7 +822,7 @@ export default function AdminPortal() {
 
                   <WebinarSection title="Integrations (rare — usually only change for a new webinar topic)">
                     <Field label="Zoom Webinar ID" value={webinar.zoomWebinarId ?? ''} onChange={v => updateWebinarField('zoomWebinarId', v)} placeholder="82257523823" hint="9–12 digit numeric ID. Falls back to ZOOM_WEBINAR_ID env var if blank." />
-                    <Field label="LSQ Source name" value={webinar.lsqSourceName ?? ''} onChange={v => updateWebinarField('lsqSourceName', v)} placeholder="PPC_Masterclass" />
+                    <Field label="LSQ Source name" value={webinar.lsqSourceName ?? ''} onChange={v => updateWebinarField('lsqSourceName', v)} placeholder="PPC-SM" />
                     <Field label="WhatsApp template name" value={webinar.whatsappTemplateName ?? ''} onChange={v => updateWebinarField('whatsappTemplateName', v)} placeholder="form_otp" hint="Must be an approved Meta WA template." />
                   </WebinarSection>
 
