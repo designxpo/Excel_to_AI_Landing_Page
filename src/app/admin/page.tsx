@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
+import TeamTab from "./TeamTab";
 
 type FaqItem = { id: string; q: string; a: string; order: number };
 type FeatureItem = { id: string; icon: string | null; title: string; description: string; accent: string | null; sortOrder: number };
@@ -68,7 +69,7 @@ type WebinarConfig = {
   genericBrochureUrl: string | null; genericBrochureCta: string | null;
 };
 
-type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs';
+type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs' | 'team';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -457,6 +458,7 @@ export default function AdminPortal() {
                 { key: 'agenda',        label: 'Agenda' },
                 { key: 'faqs',          label: 'FAQs' },
                 { key: 'registrations', label: 'Registrations' },
+                { key: 'team',          label: 'Team' },
               ] as { key: AdminTab; label: string }[]).map(tab => (
                 <button
                   key={tab.key}
@@ -1175,6 +1177,9 @@ export default function AdminPortal() {
               </div>
             </div>
           )}
+
+          {/* Team Tab */}
+          {activeTab === "team" && <TeamTab />}
 
         </div>
       </div>

@@ -1,16 +1,22 @@
 import { NextResponse } from 'next/server';
 import crypto from 'crypto';
+import bcrypt from 'bcryptjs';
 import { signAdminSession } from '@/lib/auth';
 import { assertSameOrigin } from '@/lib/security';
+import {
+  getAdminByEmailActive,
+  createAdminUser,
+  touchAdminLastLogin,
+  countAdminUsers,
+} from '@/lib/db';
 
-type AdminCredential = { user: string; password: string };
+type EnvCredential = { user: string; password: string };
 
-// Load the full list of admin credentials. Supports two formats:
-//   1. ADMIN_CREDENTIALS — JSON array: [{"user":"a","password":"b"}, ...]
-//   2. Legacy ADMIN_USER + ADMIN_PASSWORD — single credential
-// Both may coexist; entries are merged and de-duplicated by user.
-function loadAdminCredentials(): AdminCredential[] {
-  const list: AdminCredential[] = [];
+// Env-based credentials are the *fallback* (so DB outage / fresh DB never
+// locks you out). On a successful env-cred login, we auto-migrate the entry
+// into the admin_users table so future logins go through bcrypt + DB.
+function loadEnvCredentials(): EnvCredential[] {
+  const list: EnvCredential[] = [];
   const raw = process.env.ADMIN_CREDENTIALS;
   if (raw) {
     try {
@@ -54,25 +60,62 @@ export async function POST(request: Request) {
       return NextResponse.json({ success: false, error: 'Bad request' }, { status: 400 });
     }
 
-    const credentials = loadAdminCredentials();
-    if (credentials.length === 0) {
-      throw new Error('No admin credentials configured (set ADMIN_CREDENTIALS or ADMIN_USER/ADMIN_PASSWORD)');
+    let matchedUser: string | null = null;
+    let matchedAdminId: string | null = null;
+
+    // 1. Try the DB first.
+    try {
+      const dbAdmin = await getAdminByEmailActive(username);
+      if (dbAdmin && (await bcrypt.compare(password, dbAdmin.passwordHash))) {
+        matchedUser = dbAdmin.email;
+        matchedAdminId = dbAdmin.id;
+      }
+    } catch (err) {
+      // DB unreachable / table missing — log and continue to env fallback.
+      console.error('[Login] DB lookup failed, falling back to env:', err);
     }
 
-    // Check every credential without short-circuiting to keep timing uniform.
-    let matched: AdminCredential | null = null;
-    for (const cred of credentials) {
-      const userOk = timingSafeEqualStr(username, cred.user);
-      const passOk = timingSafeEqualStr(password, cred.password);
-      if (userOk && passOk) matched = cred;
+    // 2. Fall back to env credentials.
+    if (!matchedUser) {
+      const envCreds = loadEnvCredentials();
+      for (const cred of envCreds) {
+        const userOk = timingSafeEqualStr(username, cred.user);
+        const passOk = timingSafeEqualStr(password, cred.password);
+        if (userOk && passOk) matchedUser = cred.user;
+      }
+      // If env login succeeded and the table is empty (first time), seed the
+      // table with this credential so it becomes the bootstrap admin.
+      if (matchedUser) {
+        try {
+          const total = await countAdminUsers();
+          if (total === 0) {
+            const hash = await bcrypt.hash(password, 10);
+            const created = await createAdminUser({
+              email: matchedUser,
+              name: null,
+              passwordHash: hash,
+              createdBy: 'env-bootstrap',
+            });
+            matchedAdminId = created.id;
+            console.log(`[Login] Bootstrapped admin_users from env: ${matchedUser}`);
+          }
+        } catch (err) {
+          console.error('[Login] Bootstrap into admin_users failed (login still succeeded):', err);
+        }
+      }
     }
 
-    if (!matched) {
+    if (!matchedUser) {
       return NextResponse.json({ success: false, error: 'Invalid credentials' }, { status: 401 });
     }
 
+    if (matchedAdminId) {
+      // Fire-and-forget — don't block login if the timestamp update fails.
+      touchAdminLastLogin(matchedAdminId).catch(() => undefined);
+    }
+
     const ttlSeconds = 60 * 60 * 24;
-    const token = await signAdminSession(matched.user, ttlSeconds);
+    const token = await signAdminSession(matchedUser, ttlSeconds);
 
     const response = NextResponse.json({ success: true });
     response.cookies.set({

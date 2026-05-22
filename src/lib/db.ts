@@ -1103,3 +1103,135 @@ export async function replaceAgendaItems(items: AgendaItemInput[]): Promise<Agen
   }
   return clean.map(mapAgendaItem);
 }
+
+// ── admin_users ────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string | null;
+  isActive: boolean;
+  createdAt: string;
+  createdBy: string | null;
+  lastLoginAt: string | null;
+}
+
+export interface AdminUserWithHash extends AdminUser {
+  passwordHash: string;
+}
+
+interface AdminUserRow {
+  id: string;
+  email: string;
+  name: string | null;
+  password_hash: string;
+  is_active: boolean;
+  created_at: string;
+  created_by: string | null;
+  last_login_at: string | null;
+}
+
+function mapAdmin(row: AdminUserRow): AdminUser {
+  return {
+    id: row.id,
+    email: row.email,
+    name: row.name,
+    isActive: row.is_active,
+    createdAt: row.created_at,
+    createdBy: row.created_by,
+    lastLoginAt: row.last_login_at,
+  };
+}
+
+function mapAdminWithHash(row: AdminUserRow): AdminUserWithHash {
+  return { ...mapAdmin(row), passwordHash: row.password_hash };
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const { data, error } = await client()
+    .from('admin_users')
+    .select('*')
+    .order('created_at', { ascending: true });
+  if (error) throw error;
+  return (data as AdminUserRow[]).map(mapAdmin);
+}
+
+export async function getAdminByEmail(email: string): Promise<AdminUserWithHash | null> {
+  const { data, error } = await client()
+    .from('admin_users')
+    .select('*')
+    .ilike('email', email)
+    .limit(1)
+    .maybeSingle<AdminUserRow>();
+  if (error) throw error;
+  return data ? mapAdminWithHash(data) : null;
+}
+
+export async function getAdminByEmailActive(email: string): Promise<AdminUserWithHash | null> {
+  const admin = await getAdminByEmail(email);
+  return admin && admin.isActive ? admin : null;
+}
+
+export async function createAdminUser(input: {
+  email: string;
+  name: string | null;
+  passwordHash: string;
+  createdBy: string | null;
+}): Promise<AdminUser> {
+  const { data, error } = await client()
+    .from('admin_users')
+    .insert({
+      email: input.email,
+      name: input.name,
+      password_hash: input.passwordHash,
+      created_by: input.createdBy,
+    })
+    .select('*')
+    .single<AdminUserRow>();
+  if (error) throw error;
+  return mapAdmin(data);
+}
+
+export async function updateAdminUser(
+  id: string,
+  patch: Partial<{ name: string | null; isActive: boolean; passwordHash: string }>,
+): Promise<AdminUser> {
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.name !== undefined) dbPatch.name = patch.name;
+  if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+  if (patch.passwordHash !== undefined) dbPatch.password_hash = patch.passwordHash;
+
+  const { data, error } = await client()
+    .from('admin_users')
+    .update(dbPatch)
+    .eq('id', id)
+    .select('*')
+    .single<AdminUserRow>();
+  if (error) throw error;
+  return mapAdmin(data);
+}
+
+export async function deleteAdminUser(id: string): Promise<void> {
+  const { error } = await client().from('admin_users').delete().eq('id', id);
+  if (error) throw error;
+}
+
+export async function touchAdminLastLogin(id: string): Promise<void> {
+  const { error } = await client()
+    .from('admin_users')
+    .update({ last_login_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) {
+    // Non-critical — log but don't block login.
+    console.error('[db.touchAdminLastLogin]', error);
+  }
+}
+
+export async function countAdminUsers(): Promise<number> {
+  const { count, error } = await client()
+    .from('admin_users')
+    .select('*', { count: 'exact', head: true });
+  if (error) throw error;
+  return count ?? 0;
+}
+
