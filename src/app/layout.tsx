@@ -62,6 +62,14 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${poppins.variable} scroll-smooth`} suppressHydrationWarning>
       <head>
+        {/* Initialize GTM dataLayer early so any GTM/Stape script loaded
+            later (or any pixel-fire push from the form) can rely on it
+            existing. Idempotent — safe even if GTM later redefines it. */}
+        <Script
+          id="dl-init"
+          strategy="beforeInteractive"
+          dangerouslySetInnerHTML={{ __html: 'window.dataLayer = window.dataLayer || [];' }}
+        />
         {/* Meta Pixel Code — only render when a real Pixel ID is configured */}
         {META_PIXEL_ID && (
           <Script

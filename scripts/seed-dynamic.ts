@@ -55,7 +55,7 @@ const SETTINGS = {
   nav_cta_text: "Book Free Session",
   logo_path: "/brand/ALabs_Masterclass.svg",
   zoom_webinar_id: "82257523823",
-  lsq_source_name: "PPC_Masterclass",
+  lsq_source_name: "PPC-SM",
   whatsapp_template_name: "form_otp",
   hero_stat_1_value: "50K+",
   hero_stat_1_label: "Students Trained",

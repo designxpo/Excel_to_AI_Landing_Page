@@ -108,6 +108,74 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
   const utmRef = useRef<any>({});
   const gclidRef = useRef<string | null>(null);
 
+  // ─── Anti-duplicate-fire guards ────────────────────────────────────────
+  // Synchronous refs (no React render delay) block the same handler from
+  // running twice if a user double/triple-clicks the submit button before
+  // React updates the `isLoading` state. Without these, a fast double-click
+  // can sneak two POSTs in within the same animation frame.
+  const submittingInitialRef = useRef(false);
+  const submittingOtpRef = useRef(false);
+
+  // sessionStorage gate so refreshes / back-button / re-renders can't refire
+  // the Lead or CompleteRegistration pixel. Keyed by event name + email so
+  // a different user on the same device (rare) can still register.
+  //
+  // This helper does THREE things atomically:
+  //   1. Fires the browser Meta Pixel (fbq) with eventID
+  //   2. Pushes to GTM dataLayer for Stape's CAPI tag to consume — using
+  //      the SAME event_id so server↔browser dedup works
+  //   3. Gates everything behind sessionStorage so it can only run once
+  const firePixelOnce = (
+    eventName: 'Lead' | 'CompleteRegistration',
+    email: string,
+    payload: Record<string, unknown>,
+    eventId: string,
+    userData: { phone?: string; firstName?: string; lastName?: string; city?: string; fbp?: string; fbc?: string } = {},
+  ) => {
+    if (typeof window === 'undefined') return;
+    const key = `lp_pixel_fired_${eventName}_${email.toLowerCase()}`;
+    try {
+      if (window.sessionStorage.getItem(key)) return; // already fired this session
+      window.sessionStorage.setItem(key, '1');
+    } catch { /* private mode — no sessionStorage; still fire */ }
+
+    // 1. Browser pixel (Meta direct)
+    if (typeof window.fbq === 'function') {
+      window.fbq('track', eventName, payload, { eventID: eventId });
+    }
+
+    // 2. GTM dataLayer push (Stape sGTM consumes this for CAPI)
+    // Stape's Meta CAPI tag should:
+    //   • Use Custom Event trigger: `lp_lead_submitted` or `lp_registration_completed`
+    //   • Map its `event_id` field to {{DLV - event_id}}
+    //   • Map `user_data.em` to {{DLV - user_email}} (Stape hashes server-side)
+    //   • Map `user_data.ph` to {{DLV - user_phone}} (Stape hashes server-side)
+    //   • Map `user_data.fbp` to {{DLV - fbp}}, `user_data.fbc` to {{DLV - fbc}}
+    const gtmEventName = eventName === 'Lead' ? 'lp_lead_submitted' : 'lp_registration_completed';
+    const w = window as unknown as { dataLayer?: Array<Record<string, unknown>> };
+    w.dataLayer = w.dataLayer || [];
+    w.dataLayer.push({
+      event: gtmEventName,
+      // Standard dedup field — Stape's CAPI tag MUST use this same value
+      event_id: eventId,
+      // Echo Meta event_name so Stape's tag knows what to send
+      meta_event_name: eventName,
+      // Raw user data — Stape's sGTM hashes these server-side before forwarding to Meta
+      user_email: email.toLowerCase(),
+      user_phone: userData.phone || undefined,
+      user_first_name: userData.firstName || undefined,
+      user_last_name: userData.lastName || undefined,
+      user_city: userData.city || undefined,
+      // Browser-side ad cookies (forwarded raw)
+      fbp: userData.fbp || undefined,
+      fbc: userData.fbc || undefined,
+      // Custom data
+      content_name: payload.content_name,
+      content_category: payload.content_category,
+      status: payload.status,
+    });
+  };
+
   useEffect(() => {
     initBehaviourTracking();
     const params = new URLSearchParams(window.location.search);
@@ -150,16 +218,22 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
   const handleInitialSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Hard-block re-entry while a submit is in flight. React's `isLoading`
+    // state has a render-tick of delay; this ref blocks immediately.
+    if (submittingInitialRef.current) return;
+    submittingInitialRef.current = true;
+
     // Per-field validation. First failure wins so the user sees one clear error.
-    const nameErr  = validateName(formData.fullName);   if (nameErr)  { setError(nameErr);  return; }
-    const emailErr = validateEmail(formData.email);     if (emailErr) { setError(emailErr); return; }
-    const phoneErr = validatePhone(formData.phone);     if (phoneErr) { setError(phoneErr); return; }
-    if (!formData.status)         { setError('Please select your current status.');   return; }
+    const nameErr  = validateName(formData.fullName);   if (nameErr)  { setError(nameErr);  submittingInitialRef.current = false; return; }
+    const emailErr = validateEmail(formData.email);     if (emailErr) { setError(emailErr); submittingInitialRef.current = false; return; }
+    const phoneErr = validatePhone(formData.phone);     if (phoneErr) { setError(phoneErr); submittingInitialRef.current = false; return; }
+    if (!formData.status)         { setError('Please select your current status.');   submittingInitialRef.current = false; return; }
     if (!isValidCity(formData.city)) {
       setError('Please enter your real city name (letters only, at least 3 characters).');
+      submittingInitialRef.current = false;
       return;
     }
-    if (!formData.referralSource) { setError('Please tell us how you heard about this masterclass.'); return; }
+    if (!formData.referralSource) { setError('Please tell us how you heard about this masterclass.'); submittingInitialRef.current = false; return; }
 
     // Normalize sanitized values before submit.
     const normalizedName  = formData.fullName.trim().replace(/\s+/g, ' ');
@@ -206,13 +280,21 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
 
       const result = await res.json();
       if (result.success) {
-        // Fire browser-side Meta Pixel Lead event with same eventID as the server CAPI call.
-        if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
-          window.fbq('track', 'Lead', {
-            content_name: 'ExcelToAI_Masterclass',
-            content_category: typeFilter,
-          }, { eventID: leadEventId });
-        }
+        // Fire Lead exactly once per (event, email, session) — guarded by
+        // sessionStorage so refreshes / re-renders can't refire.
+        // Also pushes to GTM dataLayer with same event_id for Stape CAPI dedup.
+        const nameParts = normalizedName.split(' ');
+        firePixelOnce('Lead', normalizedEmail, {
+          content_name: 'ExcelToAI_Masterclass',
+          content_category: typeFilter,
+        }, leadEventId, {
+          phone: normalizedPhone,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' '),
+          city: normalizedCity,
+          fbp,
+          fbc,
+        });
 
         const incomingZoomUrl: string = result.zoomJoinUrl || "";
         setZoomJoinUrl(incomingZoomUrl);
@@ -228,17 +310,26 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
         }
       } else {
         setError(result.error || "Something went wrong. Please try again.");
+        submittingInitialRef.current = false; // allow retry on failure
       }
     } catch (err) {
       setError("Connection error. Please try again.");
+      submittingInitialRef.current = false; // allow retry on network error
     } finally {
       setIsLoading(false);
+      // NOTE: we intentionally DO NOT reset submittingInitialRef on success.
+      // Success means a Lead has been fired; a second submission attempt
+      // would be a duplicate. Page navigation/OTP step prevents re-entry.
     }
   };
 
   const handleOtpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (otp.length !== 4) return;
+
+    // Hard-block re-entry while OTP verify is in flight.
+    if (submittingOtpRef.current) return;
+    submittingOtpRef.current = true;
 
     setIsLoading(true);
     setError("");
@@ -264,14 +355,21 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
 
       const result = await res.json();
       if (result.success) {
-        // Fire browser-side Meta Pixel CompleteRegistration with the same eventID as the server CAPI call.
-        if (typeof window !== 'undefined' && typeof window.fbq === 'function') {
-          window.fbq('track', 'CompleteRegistration', {
-            content_name: 'ExcelToAI_Masterclass',
-            content_category: typeFilter,
-            status: 'Verified',
-          }, { eventID: completeEventId });
-        }
+        // Fire CompleteRegistration exactly once per (event, email, session).
+        // Also pushes to GTM dataLayer with same event_id for Stape CAPI dedup.
+        const nameParts = formData.fullName.split(' ');
+        firePixelOnce('CompleteRegistration', formData.email, {
+          content_name: 'ExcelToAI_Masterclass',
+          content_category: typeFilter,
+          status: 'Verified',
+        }, completeEventId, {
+          phone: formData.phone,
+          firstName: nameParts[0] || '',
+          lastName: nameParts.slice(1).join(' '),
+          city: formData.city,
+          fbp,
+          fbc,
+        });
 
         setIsSuccess(true);
         // Prefer the URL returned by /verify (decoded from the signed token).
@@ -283,9 +381,11 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
         }, 1500);
       } else {
         setError(result.error || "Invalid code. Please try again.");
+        submittingOtpRef.current = false; // allow retry on wrong OTP
       }
     } catch (err) {
       setError("Verification failed.");
+      submittingOtpRef.current = false; // allow retry on network error
     } finally {
       setIsLoading(false);
     }
