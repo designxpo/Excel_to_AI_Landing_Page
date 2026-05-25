@@ -1,10 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react";
+import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown, Settings, Video, Star, ListOrdered, HelpCircle, Layers, Users, UserCog } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import TeamTab from "./TeamTab";
+import SessionsTab from "./SessionsTab";
 
 type FaqItem = { id: string; q: string; a: string; order: number };
 type FeatureItem = { id: string; icon: string | null; title: string; description: string; accent: string | null; sortOrder: number };
@@ -70,7 +71,7 @@ type WebinarConfig = {
   genericBrochureUrl: string | null; genericBrochureCta: string | null;
 };
 
-type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs' | 'team';
+type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs' | 'team' | 'sessions';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -551,43 +552,56 @@ export default function AdminPortal() {
     router.refresh();
   };
 
+  const NAV_ITEMS: { key: AdminTab; label: string; icon: React.ReactNode }[] = [
+    { key: 'settings',      label: 'Speaker',       icon: <Settings      className="w-4 h-4" /> },
+    { key: 'webinar',       label: 'Webinar',        icon: <Video         className="w-4 h-4" /> },
+    { key: 'features',      label: 'Features',       icon: <Star          className="w-4 h-4" /> },
+    { key: 'agenda',        label: 'Agenda',         icon: <ListOrdered   className="w-4 h-4" /> },
+    { key: 'faqs',          label: 'FAQs',           icon: <HelpCircle    className="w-4 h-4" /> },
+    { key: 'sessions',      label: 'Sessions',       icon: <Layers        className="w-4 h-4" /> },
+    { key: 'registrations', label: 'Registrations',  icon: <Users         className="w-4 h-4" /> },
+    { key: 'team',          label: 'Team',           icon: <UserCog       className="w-4 h-4" /> },
+  ];
+
   return (
-    <div className="min-h-screen bg-slate-50 text-slate-900 p-8 font-sans">
-      <div className="max-w-5xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-        
-        {/* Header */}
-        <div className="border-b border-slate-200 bg-slate-100/50 p-6 flex items-center justify-between">
-          <h1 className="text-2xl font-bold text-[#003368]">Admin Portal</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex gap-1 bg-slate-200 p-1 rounded-lg flex-wrap">
-              {([
-                { key: 'settings',      label: 'Speaker' },
-                { key: 'webinar',       label: 'Webinar' },
-                { key: 'features',      label: 'Features' },
-                { key: 'agenda',        label: 'Agenda' },
-                { key: 'faqs',          label: 'FAQs' },
-                { key: 'registrations', label: 'Registrations' },
-                { key: 'team',          label: 'Team' },
-              ] as { key: AdminTab; label: string }[]).map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => setActiveTab(tab.key)}
-                  className={`px-3 py-1.5 text-sm font-semibold rounded-md transition-all ${activeTab === tab.key ? 'bg-white shadow text-[#003368]' : 'text-slate-500 hover:text-slate-700'}`}
-                >
-                  {tab.label}
-                </button>
-              ))}
-            </div>
-            <button 
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-lg transition-colors border border-transparent hover:border-red-100"
-            >
-              <LogOut className="w-4 h-4" /> Logout
-            </button>
-          </div>
+    <div className="min-h-screen flex font-sans text-slate-900">
+
+      {/* Sidebar */}
+      <aside className="w-56 shrink-0 bg-[#003368] flex flex-col h-screen sticky top-0">
+        <div className="px-5 py-5 border-b border-white/10">
+          <p className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Admin</p>
+          <h1 className="text-lg font-extrabold text-white mt-0.5 leading-tight">Portal</h1>
         </div>
 
-        {/* Content */}
+        <nav className="flex-1 overflow-y-auto py-3 px-2 space-y-0.5">
+          {NAV_ITEMS.map(tab => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-all text-left ${
+                activeTab === tab.key
+                  ? 'bg-white/15 text-white'
+                  : 'text-white/55 hover:text-white hover:bg-white/10'
+              }`}
+            >
+              {tab.icon}
+              {tab.label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="px-2 py-3 border-t border-white/10">
+          <button
+            onClick={handleLogout}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold text-white/55 hover:text-white hover:bg-white/10 transition-all"
+          >
+            <LogOut className="w-4 h-4" /> Logout
+          </button>
+        </div>
+      </aside>
+
+      {/* Main content */}
+      <main className="flex-1 bg-slate-50 min-h-screen overflow-y-auto">
         <div className="p-8">
           
           {/* Settings Tab */}
@@ -1461,8 +1475,11 @@ export default function AdminPortal() {
           {/* Team Tab */}
           {activeTab === "team" && <TeamTab />}
 
+          {/* Sessions Tab */}
+          {activeTab === "sessions" && <SessionsTab />}
+
         </div>
-      </div>
+      </main>
     </div>
   );
 }

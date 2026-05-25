@@ -34,6 +34,27 @@ export default async function MasterclassLandingPage() {
     getAgendaItems(),
   ]);
 
+  // No active session → render a minimal "next webinar coming soon" page so
+  // the LP doesn't accept registrations between cohorts.
+  if (!config.activeSessionId) {
+    return (
+      <div className="min-h-screen bg-slate-50 text-[#003368] flex items-center justify-center px-6">
+        <div className="max-w-md text-center space-y-6">
+          <div className="text-xs font-bold uppercase tracking-wider text-[#00875A]">AnalytixLabs Masterclass</div>
+          <h1 className="text-3xl md:text-4xl font-extrabold leading-tight">
+            Our next free masterclass is coming soon
+          </h1>
+          <p className="text-slate-600 text-sm md:text-base">
+            Registrations for the next cohort aren&apos;t open yet. Follow us on social or check this page again in a few days.
+          </p>
+          <div className="pt-4 text-xs text-slate-500">
+            Already registered for an upcoming session? Check your email and WhatsApp for the Zoom join link.
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // The original page also passed a `settings` object to SeoJsonLd; keep the
   // shape identical so SEO output doesn't change.
   const settings = {
@@ -326,7 +347,7 @@ export default async function MasterclassLandingPage() {
               </div>
 
               <Suspense fallback={<div className="h-[400px] flex items-center justify-center text-slate-300">Loading form...</div>}>
-                <RegistrationForm copy={formCopy} />
+                <RegistrationForm copy={formCopy} sessionCode={config.activeSessionCode} />
               </Suspense>
 
               {/* Success metrics */}

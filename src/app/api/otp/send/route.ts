@@ -101,19 +101,29 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
     }
 
-    // 0. Block duplicates + load webinar config (overrides for Zoom / LSQ /
-    // WhatsApp template come from the admin-editable DB; env values are the
-    // legacy fallback).
-    const [existing, config] = await Promise.all([
-      findRegistrationByEmailOrPhone(email, phone),
-      getWebinarConfig().catch(() => null),
-    ]);
+    // 0. Load webinar config (sources Zoom / LSQ / WhatsApp template from
+    // the active session, or admin-editable DB as fallback).
+    const config = await getWebinarConfig().catch(() => null);
+
+    // No active session → LP should be rendering the "coming soon" state and
+    // not submitting at all. Reject defensively in case someone hits the API
+    // directly.
+    if (!config?.activeSessionId) {
+      return NextResponse.json(
+        { success: false, error: 'Registration is not currently open. Please check back when the next webinar is announced.' },
+        { status: 503 },
+      );
+    }
+
+    // Duplicate check is scoped to the active session — a user can register
+    // for W002 even if they were verified for W001.
+    const existing = await findRegistrationByEmailOrPhone(email, phone, config.activeSessionId);
     if (existing) {
       return NextResponse.json(
         {
           success: false,
           duplicate: true,
-          error: 'This email or phone is already registered for the masterclass. Check your inbox for the Zoom join link.',
+          error: 'This email or phone is already registered for this webinar. Check your inbox for the Zoom join link.',
         },
         { status: 409 },
       );
@@ -170,6 +180,7 @@ export async function POST(req: NextRequest) {
         city,
         whatsappStatus: waResult.status,
         whatsappError: waResult.error,
+        sessionId: config.activeSessionId,
       });
       registrationId = created.id;
     } catch (regErr) {

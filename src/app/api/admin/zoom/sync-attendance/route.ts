@@ -20,12 +20,13 @@ import {
   updateRegistrationAttendance,
   recordAttendanceSyncRun,
   getLatestAttendanceSyncRun,
-  getWebinarConfig,
+  getActiveWebinarSession,
+  getWebinarSessionById,
 } from '@/lib/db';
 import { verifyAdminSession } from '@/lib/auth';
 import { assertSameOrigin } from '@/lib/security';
 
-const META_EVENT_NAME = process.env.META_ATTENDED_EVENT_NAME || 'WebinarAttended';
+const META_EVENT_NAME_BASE = process.env.META_ATTENDED_EVENT_NAME || 'WebinarAttended';
 const LSQ_ATTENDED_FIELD = process.env.LSQ_ATTENDED_FIELD || 'mx_Attended_Webinar';
 
 async function lsqMarkAttended(phone: string, durationMin: number): Promise<boolean> {
@@ -72,9 +73,34 @@ export async function POST(request: Request) {
   const errors: string[] = [];
 
   try {
-    // Resolve the webinar ID from admin DB (falls back to env in fetchWebinarAttendees).
-    const config = await getWebinarConfig().catch(() => null);
-    const webinarOverride = config?.zoomWebinarId?.trim() || null;
+    // Resolve which session we're syncing. Admin UI passes `sessionId` to
+    // sync a specific (possibly past) cohort; default is the active session.
+    let targetSessionId: string | null = null;
+    try {
+      const body = await request.json().catch(() => ({}));
+      if (typeof body?.sessionId === 'string') targetSessionId = body.sessionId;
+    } catch { /* no body — use active */ }
+
+    const targetSession = targetSessionId
+      ? await getWebinarSessionById(targetSessionId)
+      : await getActiveWebinarSession();
+
+    if (!targetSession) {
+      const err = 'No webinar session to sync. Activate a session or pass a sessionId.';
+      await recordAttendanceSyncRun({
+        ranAt: startedAt,
+        ranBy: session.sub,
+        webinarId: null,
+        attendeesTotal: 0,
+        newlyMarked: 0,
+        metaFired: 0,
+        lsqUpdated: 0,
+        errorSummary: err,
+      });
+      return NextResponse.json({ success: false, error: err }, { status: 400 });
+    }
+
+    const webinarOverride = targetSession.zoomWebinarId?.trim() || null;
 
     // 1. Fetch attendees from Zoom.
     const result = await fetchWebinarAttendees(webinarOverride);
@@ -94,10 +120,16 @@ export async function POST(request: Request) {
     attendeesTotal = result.attendees.length;
     const attendeesByEmail = new Map(result.attendees.map((a) => [a.email, a]));
 
-    // 2. Pull our verified registrations and decide which ones to mark.
-    const registrations = await getVerifiedRegistrationsForAttendanceSync();
+    // 2. Pull verified registrations for THIS session only.
+    const registrations = await getVerifiedRegistrationsForAttendanceSync(targetSession.id);
 
-    // 3. Process each registration. We update DB sequentially to keep error
+    // 3. Meta event name: per user's preference we use BOTH a suffixed event
+    // name (e.g. WebinarAttended_W001) AND put the session code in
+    // custom_data, so audiences can be built either way.
+    const suffix = (targetSession.metaEventSuffix || targetSession.code || '').trim();
+    const metaEventName = suffix ? `${META_EVENT_NAME_BASE}_${suffix}` : META_EVENT_NAME_BASE;
+
+    // 4. Process each registration. We update DB sequentially to keep error
     // handling simple — the typical webinar has ≤500 attendees, so this is
     // fine. Could parallelize if needed later.
     for (const reg of registrations) {
@@ -130,14 +162,14 @@ export async function POST(request: Request) {
         continue;
       }
 
-      // 3a. Fire Meta CAPI — but only once per registration (idempotent).
+      // 4a. Fire Meta CAPI — but only once per registration (idempotent).
       if (!reg.metaAttendedEventFired) {
         const nameParts = (reg.fullName || '').split(' ').filter(Boolean);
         // Deterministic event_id so re-running this sync won't double-count
         // even if the DB flag failed to write last time.
         const eventId = `attended_${reg.id}`;
         const capiRes = await sendMetaCapiEvent({
-          eventName: META_EVENT_NAME,
+          eventName: metaEventName,
           eventId,
           eventTime: Math.floor(new Date(matched.joinTime).getTime() / 1000),
           actionSource: 'system_generated',
@@ -154,6 +186,10 @@ export async function POST(request: Request) {
             content_name: 'ExcelToAI_Masterclass',
             duration_min: matched.durationMin,
             webinar_id: result.webinarId,
+            // Session tagging — admins can filter Meta custom audiences by
+            // this even though the event name itself is already suffixed.
+            webinar_session_code: targetSession.code,
+            webinar_session_title: targetSession.title,
           },
         });
         if (capiRes.ok) {
@@ -169,13 +205,13 @@ export async function POST(request: Request) {
         }
       }
 
-      // 3b. Mark LSQ. Not idempotent on our side, but LSQ is — overwriting
+      // 4b. Mark LSQ. Not idempotent on our side, but LSQ is — overwriting
       // the same attribute is harmless.
       const lsqOk = await lsqMarkAttended(reg.phone, matched.durationMin);
       if (lsqOk) lsqUpdated++;
     }
 
-    // 4. Audit log.
+    // 5. Audit log.
     await recordAttendanceSyncRun({
       ranAt: startedAt,
       ranBy: session.sub,

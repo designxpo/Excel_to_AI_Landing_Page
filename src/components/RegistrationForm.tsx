@@ -37,6 +37,12 @@ export interface RegistrationFormCopy {
 interface RegistrationFormProps {
   typeFilter?: string;
   copy?: RegistrationFormCopy;
+  /**
+   * Active webinar session code (e.g. "W001"). Included in the dataLayer
+   * push so Stape's CAPI tag can attach it to each Lead / CompleteRegistration
+   * event for per-session audience building.
+   */
+  sessionCode?: string | null;
 }
 
 function parseOptions(text: string | null | undefined, fallback: string[]): string[] {
@@ -58,7 +64,7 @@ function newEventId(): string {
   return `evt_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: RegistrationFormProps) {
+export function RegistrationForm({ typeFilter = "PPC-SM", copy = {}, sessionCode = null }: RegistrationFormProps) {
   // Resolve copy with hardcoded fallbacks matching the original page.
   const labelName     = copy.labelName     ?? 'Full Name';
   const labelEmail    = copy.labelEmail    ?? 'Email';
@@ -181,6 +187,10 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
       content_name: payload.content_name,
       content_category: payload.content_category,
       status: payload.status,
+      // Webinar session tagging — Stape's CAPI tag can map this into
+      // custom_data.webinar_session_code so per-session Meta custom audiences
+      // are filterable without changing the event name itself.
+      webinar_session_code: sessionCode || undefined,
     });
   };
 

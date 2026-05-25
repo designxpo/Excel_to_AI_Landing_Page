@@ -16,6 +16,7 @@ export async function proxy(req: NextRequest) {
   const isAdminTeamApi = url.pathname.startsWith('/api/admin/team');
   const isAdminZoomApi = url.pathname.startsWith('/api/admin/zoom');
   const isAdminRegsApi = url.pathname.startsWith('/api/admin/registrations');
+  const isAdminSessionsApi = url.pathname.startsWith('/api/admin/sessions');
 
   const gatedApi =
     isSettingsApi ||
@@ -27,7 +28,8 @@ export async function proxy(req: NextRequest) {
     isAgendaWrite ||
     isAdminTeamApi ||
     isAdminZoomApi ||
-    isAdminRegsApi;
+    isAdminRegsApi ||
+    isAdminSessionsApi;
 
   if (!(isAdminRoute || gatedApi)) {
     return NextResponse.next();
@@ -60,5 +62,7 @@ export const config = {
     '/api/admin/team/:path*',
     '/api/admin/zoom/:path*',
     '/api/admin/registrations/:path*',
+    '/api/admin/sessions',
+    '/api/admin/sessions/:path*',
   ],
 };

@@ -28,6 +28,8 @@ export interface Registration {
   attendanceDurationMin?: number | null;
   attendanceSyncedAt?: string | null;
   metaAttendedEventFired?: boolean | null;
+  // Session the registration belongs to.
+  sessionId?: string | null;
 }
 
 export interface Faq {
@@ -199,6 +201,13 @@ type SettingsRow = {
 };
 
 export interface WebinarConfig extends SpeakerSettings {
+  // Active session metadata — null when no session is active (LP renders
+  // "coming soon" state). Other session fields like dateLabel/zoomWebinarId
+  // get merged into the top-level webinar* fields below so the LP component
+  // tree doesn't have to change.
+  activeSessionId: string | null;
+  activeSessionCode: string | null;
+  activeSessionMetaEventSuffix: string | null;
   webinarTitle: string | null;
   webinarSubtitle: string | null;
   eyebrowText: string | null;
@@ -387,6 +396,7 @@ type RegistrationRow = {
   attendance_duration_min?: number | null;
   attendance_synced_at?: string | null;
   meta_attended_event_fired?: boolean | null;
+  session_id?: string | null;
 };
 
 type FaqRow = {
@@ -423,6 +433,7 @@ function mapRegistration(row: RegistrationRow): Registration {
     attendanceDurationMin: row.attendance_duration_min ?? null,
     attendanceSyncedAt: row.attendance_synced_at ?? null,
     metaAttendedEventFired: row.meta_attended_event_fired ?? null,
+    sessionId: row.session_id ?? null,
   };
 }
 
@@ -437,6 +448,11 @@ function mapWebinarConfig(row: SettingsRow): WebinarConfig {
     speakerTitle: row.speaker_title,
     speakerImage: row.speaker_image,
     speakerBio: row.speaker_bio,
+    // Active-session markers — populated by getWebinarConfig() after the
+    // settings row is read. mapWebinarConfig() itself just defaults them.
+    activeSessionId: null,
+    activeSessionCode: null,
+    activeSessionMetaEventSuffix: null,
     // New dynamic fields
     webinarTitle: row.webinar_title ?? null,
     webinarSubtitle: row.webinar_subtitle ?? null,
@@ -644,25 +660,34 @@ export async function getRegistrations(): Promise<Registration[]> {
 
 /**
  * Returns an existing VERIFIED registration matching `email` (case-insensitive)
- * OR `phone`. Used to prevent duplicate completed signups. Unverified rows are
- * intentionally ignored so users can retry the OTP step.
+ * OR `phone`, scoped to a specific webinar session. Used to prevent duplicate
+ * completed signups for the SAME webinar — a user who attended W001 can still
+ * register for W002.
+ *
+ * If `sessionId` is null (no active session), returns null — there's nothing
+ * to block against, and we shouldn't be accepting new registrations anyway
+ * (the LP renders the "coming soon" state in that case).
+ *
+ * Unverified rows are intentionally ignored so users can retry the OTP step.
  */
 export async function findRegistrationByEmailOrPhone(
   email: string,
   phone: string,
+  sessionId: string | null,
 ): Promise<Registration | null> {
   const normEmail = email.trim().toLowerCase();
   const normPhone = phone.replace(/\D/g, '');
   if (!normEmail && !normPhone) return null;
+  if (!sessionId) return null; // no active session → nothing to dedupe against
 
   try {
     const supabase = client();
     const [byEmail, byPhone] = await Promise.all([
       normEmail
-        ? supabase.from('registrations').select('*').ilike('email', normEmail).eq('status', 'Verified').limit(1)
+        ? supabase.from('registrations').select('*').ilike('email', normEmail).eq('status', 'Verified').eq('session_id', sessionId).limit(1)
         : Promise.resolve({ data: null, error: null }),
       normPhone
-        ? supabase.from('registrations').select('*').eq('phone', normPhone).eq('status', 'Verified').limit(1)
+        ? supabase.from('registrations').select('*').eq('phone', normPhone).eq('status', 'Verified').eq('session_id', sessionId).limit(1)
         : Promise.resolve({ data: null, error: null }),
     ]);
     if (byEmail.error) throw byEmail.error;
@@ -687,12 +712,21 @@ export async function addUnverifiedRegistration(
   reg: Omit<Registration, 'id' | 'createdAt' | 'status' | 'attemptNumber'> & {
     whatsappStatus?: string | null;
     whatsappError?: string | null;
+    sessionId?: string | null;
   },
 ): Promise<Registration> {
   const supabase = client();
 
-  // Compute the user's attempt number (best-effort — defaults to 1 if the
-  // count query fails for any reason).
+  // Resolve session: caller may pass explicitly, else use the currently
+  // active session. Without a session we still allow the insert (session_id
+  // will be null) — useful for backfills / future migrations.
+  let sessionId: string | null = reg.sessionId ?? null;
+  if (sessionId === undefined || sessionId === null) {
+    const active = await getActiveWebinarSession();
+    sessionId = active?.id ?? null;
+  }
+
+  // Compute the user's attempt number within THIS session (best-effort).
   let attemptNumber = 1;
   try {
     const normEmail = (reg.email ?? '').trim().toLowerCase();
@@ -701,17 +735,19 @@ export async function addUnverifiedRegistration(
     if (normEmail) orClause.push(`email.ilike.${normEmail}`);
     if (normPhone) orClause.push(`phone.eq.${normPhone}`);
     if (orClause.length) {
-      const { count } = await supabase
+      let query = supabase
         .from('registrations')
         .select('*', { count: 'exact', head: true })
         .or(orClause.join(','));
+      if (sessionId) query = query.eq('session_id', sessionId);
+      const { count } = await query;
       if (typeof count === 'number') attemptNumber = count + 1;
     }
   } catch (err) {
     console.error('[db.addUnverifiedRegistration] attempt count failed:', err);
   }
 
-  const row: RegistrationRow = {
+  const row: RegistrationRow & { session_id?: string | null } = {
     id: shortId(),
     full_name: reg.fullName,
     email: reg.email,
@@ -723,6 +759,7 @@ export async function addUnverifiedRegistration(
     whatsapp_error: reg.whatsappError ?? null,
     verified_at: null,
     attempt_number: attemptNumber,
+    session_id: sessionId,
   };
   const { error } = await supabase.from('registrations').insert(row);
   if (error) throw error;
@@ -759,16 +796,33 @@ export type RegistrationStats = {
   uniqueEmailsVerified: number;
 };
 
-export async function getRegistrationStats(): Promise<RegistrationStats> {
+export async function getRegistrationStats(sessionId?: string | null): Promise<RegistrationStats> {
   try {
     const supabase = client();
-    // Two count queries — fast even on large tables thanks to the index.
+    // Build each query conditionally — Supabase JS chain returns a deeply
+    // nested generic type, so wrapping in a single helper trips TS2589.
+    // Branching inline keeps the type instantiation shallow.
+    const total = sessionId
+      ? supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('session_id', sessionId)
+      : supabase.from('registrations').select('*', { count: 'exact', head: true });
+    const verified = sessionId
+      ? supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Verified').eq('session_id', sessionId)
+      : supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Verified');
+    const unverified = sessionId
+      ? supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Unverified').eq('session_id', sessionId)
+      : supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Unverified');
+    const allEmails = sessionId
+      ? supabase.from('registrations').select('email').eq('session_id', sessionId)
+      : supabase.from('registrations').select('email');
+    const verifiedEmails = sessionId
+      ? supabase.from('registrations').select('email').eq('status', 'Verified').eq('session_id', sessionId)
+      : supabase.from('registrations').select('email').eq('status', 'Verified');
     const [totalRes, verifiedRes, unverifiedRes, allEmailsRes, verifiedEmailsRes] = await Promise.all([
-      supabase.from('registrations').select('*', { count: 'exact', head: true }),
-      supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Verified'),
-      supabase.from('registrations').select('*', { count: 'exact', head: true }).eq('status', 'Unverified'),
-      supabase.from('registrations').select('email'),
-      supabase.from('registrations').select('email').eq('status', 'Verified'),
+      total,
+      verified,
+      unverified,
+      allEmails,
+      verifiedEmails,
     ]);
     if (totalRes.error) throw totalRes.error;
     if (verifiedRes.error) throw verifiedRes.error;
@@ -800,17 +854,19 @@ export type RegistrationsPage = {
 export async function getRegistrationsPaginated(
   page: number = 1,
   pageSize: number = 50,
+  sessionId?: string | null,
 ): Promise<RegistrationsPage> {
   const safePage = Math.max(1, Math.floor(page));
   const safeSize = Math.max(1, Math.min(200, Math.floor(pageSize)));
   const from = (safePage - 1) * safeSize;
   const to = from + safeSize - 1;
   try {
-    const { data, error, count } = await client()
+    let query = client()
       .from('registrations')
       .select('*', { count: 'exact' })
-      .order('created_at', { ascending: false })
-      .range(from, to);
+      .order('created_at', { ascending: false });
+    if (sessionId) query = query.eq('session_id', sessionId);
+    const { data, error, count } = await query.range(from, to);
     if (error) throw error;
     return {
       data: (data ?? []).map(mapRegistration),
@@ -900,7 +956,19 @@ export async function replaceFaqs(items: Array<FaqInput & { id?: string }>): Pro
  * Any field that's null in the DB is null in the result — callers are expected
  * to supply hardcoded fallbacks at render time.
  */
+/**
+ * Returns the merged LP config: speaker + settings fields, plus per-session
+ * fields (date, time, Zoom ID, etc.) sourced from the currently-active
+ * `webinar_sessions` row. When no session is active, the session-derived
+ * fields remain null and the LP renders its "coming soon" state.
+ *
+ * Field precedence for per-cohort values:
+ *   1. Active session (if it has a non-null value)
+ *   2. settings row (legacy fallback during migration window)
+ *   3. null
+ */
 export async function getWebinarConfig(): Promise<WebinarConfig> {
+  let baseRow: SettingsRow | null = null;
   try {
     const { data, error } = await client()
       .from('settings')
@@ -908,27 +976,41 @@ export async function getWebinarConfig(): Promise<WebinarConfig> {
       .eq('id', 'speaker')
       .maybeSingle<SettingsRow>();
     if (error) throw error;
-    if (!data) {
-      // No row yet — return speaker defaults + all dynamic fields null.
-      return mapWebinarConfig({
+    baseRow = data ?? null;
+  } catch (err) {
+    console.error('[db.getWebinarConfig] settings read failed:', err);
+  }
+
+  const base: WebinarConfig = baseRow
+    ? mapWebinarConfig(baseRow)
+    : mapWebinarConfig({
         id: 'speaker',
         speaker_name: DEFAULT_SETTINGS.speakerName,
         speaker_title: DEFAULT_SETTINGS.speakerTitle,
         speaker_image: DEFAULT_SETTINGS.speakerImage,
         speaker_bio: DEFAULT_SETTINGS.speakerBio,
       });
-    }
-    return mapWebinarConfig(data);
-  } catch (err) {
-    console.error('[db.getWebinarConfig]', err);
-    return mapWebinarConfig({
-      id: 'speaker',
-      speaker_name: DEFAULT_SETTINGS.speakerName,
-      speaker_title: DEFAULT_SETTINGS.speakerTitle,
-      speaker_image: DEFAULT_SETTINGS.speakerImage,
-      speaker_bio: DEFAULT_SETTINGS.speakerBio,
-    });
-  }
+
+  // Merge in the active session's per-cohort fields.
+  const session = await getActiveWebinarSession();
+  if (!session) return base;
+
+  return {
+    ...base,
+    activeSessionId: session.id,
+    activeSessionCode: session.code,
+    activeSessionMetaEventSuffix: session.metaEventSuffix,
+    // Per-session overrides (only override if session has a non-null value;
+    // otherwise keep the settings-table fallback).
+    webinarTitle: session.title || base.webinarTitle,
+    webinarDateLabel: session.dateLabel ?? base.webinarDateLabel,
+    webinarTimeLabel: session.timeLabel ?? base.webinarTimeLabel,
+    webinarDatetimeUtc: session.datetimeUtc ?? base.webinarDatetimeUtc,
+    durationLabel: session.durationLabel ?? base.durationLabel,
+    zoomWebinarId: session.zoomWebinarId ?? base.zoomWebinarId,
+    whatsappTemplateName: session.whatsappTemplateName ?? base.whatsappTemplateName,
+    lsqSourceName: session.lsqSourceName ?? base.lsqSourceName,
+  };
 }
 
 export async function getFeatures(): Promise<Feature[]> {
@@ -1316,19 +1398,233 @@ export async function countAdminUsers(): Promise<number> {
   return count ?? 0;
 }
 
+// ── webinar_sessions ───────────────────────────────────────────────────────
+
+export type WebinarSessionStatus = 'upcoming' | 'active' | 'completed';
+
+export interface WebinarSession {
+  id: string;
+  code: string;
+  title: string;
+  dateLabel: string | null;
+  timeLabel: string | null;
+  datetimeUtc: string | null;
+  durationLabel: string | null;
+  zoomWebinarId: string | null;
+  whatsappTemplateName: string | null;
+  lsqSourceName: string | null;
+  metaEventSuffix: string | null;
+  status: WebinarSessionStatus;
+  createdAt: string;
+  activatedAt: string | null;
+  endedAt: string | null;
+  registrationsCount: number;
+  attendeesCount: number;
+}
+
+type WebinarSessionRow = {
+  id: string;
+  code: string;
+  title: string;
+  date_label: string | null;
+  time_label: string | null;
+  datetime_utc: string | null;
+  duration_label: string | null;
+  zoom_webinar_id: string | null;
+  whatsapp_template_name: string | null;
+  lsq_source_name: string | null;
+  meta_event_suffix: string | null;
+  status: WebinarSessionStatus;
+  created_at: string;
+  activated_at: string | null;
+  ended_at: string | null;
+  registrations_count: number;
+  attendees_count: number;
+};
+
+function mapSession(row: WebinarSessionRow): WebinarSession {
+  return {
+    id: row.id,
+    code: row.code,
+    title: row.title,
+    dateLabel: row.date_label,
+    timeLabel: row.time_label,
+    datetimeUtc: row.datetime_utc,
+    durationLabel: row.duration_label,
+    zoomWebinarId: row.zoom_webinar_id,
+    whatsappTemplateName: row.whatsapp_template_name,
+    lsqSourceName: row.lsq_source_name,
+    metaEventSuffix: row.meta_event_suffix,
+    status: row.status,
+    createdAt: row.created_at,
+    activatedAt: row.activated_at,
+    endedAt: row.ended_at,
+    registrationsCount: row.registrations_count ?? 0,
+    attendeesCount: row.attendees_count ?? 0,
+  };
+}
+
+export async function listWebinarSessions(): Promise<WebinarSession[]> {
+  const { data, error } = await client()
+    .from('webinar_sessions')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data as WebinarSessionRow[]).map(mapSession);
+}
+
+export async function getActiveWebinarSession(): Promise<WebinarSession | null> {
+  try {
+    const { data, error } = await client()
+      .from('webinar_sessions')
+      .select('*')
+      .eq('status', 'active')
+      .limit(1)
+      .maybeSingle<WebinarSessionRow>();
+    if (error) throw error;
+    return data ? mapSession(data) : null;
+  } catch (err) {
+    console.error('[db.getActiveWebinarSession]', err);
+    return null;
+  }
+}
+
+export async function getWebinarSessionById(id: string): Promise<WebinarSession | null> {
+  const { data, error } = await client()
+    .from('webinar_sessions')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle<WebinarSessionRow>();
+  if (error) throw error;
+  return data ? mapSession(data) : null;
+}
+
+export async function createWebinarSession(input: {
+  code: string;
+  title: string;
+  dateLabel?: string | null;
+  timeLabel?: string | null;
+  datetimeUtc?: string | null;
+  durationLabel?: string | null;
+  zoomWebinarId?: string | null;
+  whatsappTemplateName?: string | null;
+  lsqSourceName?: string | null;
+  metaEventSuffix?: string | null;
+}): Promise<WebinarSession> {
+  const { data, error } = await client()
+    .from('webinar_sessions')
+    .insert({
+      code: input.code,
+      title: input.title,
+      date_label: input.dateLabel ?? null,
+      time_label: input.timeLabel ?? null,
+      datetime_utc: input.datetimeUtc ?? null,
+      duration_label: input.durationLabel ?? null,
+      zoom_webinar_id: input.zoomWebinarId ?? null,
+      whatsapp_template_name: input.whatsappTemplateName ?? null,
+      lsq_source_name: input.lsqSourceName ?? null,
+      // Default the Meta event suffix to the session code if not provided —
+      // matches the user's preference for suffixed event names.
+      meta_event_suffix: input.metaEventSuffix ?? input.code,
+      status: 'upcoming',
+    })
+    .select('*')
+    .single<WebinarSessionRow>();
+  if (error) throw error;
+  return mapSession(data);
+}
+
+/**
+ * Marks the given session as active. If another session is already active,
+ * it's moved to 'completed' first. The DB has a partial unique index that
+ * also enforces this at the storage layer.
+ */
+export async function activateWebinarSession(id: string): Promise<WebinarSession> {
+  const supabase = client();
+  // 1. End any currently-active session.
+  const { error: endErr } = await supabase
+    .from('webinar_sessions')
+    .update({ status: 'completed', ended_at: new Date().toISOString() })
+    .eq('status', 'active')
+    .neq('id', id);
+  if (endErr) throw endErr;
+
+  // 2. Activate this one.
+  const { data, error } = await supabase
+    .from('webinar_sessions')
+    .update({ status: 'active', activated_at: new Date().toISOString(), ended_at: null })
+    .eq('id', id)
+    .select('*')
+    .single<WebinarSessionRow>();
+  if (error) throw error;
+  return mapSession(data);
+}
+
+export async function endWebinarSession(id: string): Promise<WebinarSession> {
+  const { data, error } = await client()
+    .from('webinar_sessions')
+    .update({ status: 'completed', ended_at: new Date().toISOString() })
+    .eq('id', id)
+    .select('*')
+    .single<WebinarSessionRow>();
+  if (error) throw error;
+  return mapSession(data);
+}
+
+export async function updateWebinarSession(
+  id: string,
+  patch: Partial<{
+    title: string;
+    dateLabel: string | null;
+    timeLabel: string | null;
+    datetimeUtc: string | null;
+    durationLabel: string | null;
+    zoomWebinarId: string | null;
+    whatsappTemplateName: string | null;
+    lsqSourceName: string | null;
+    metaEventSuffix: string | null;
+  }>,
+): Promise<WebinarSession> {
+  const dbPatch: Record<string, unknown> = {};
+  if (patch.title !== undefined) dbPatch.title = patch.title;
+  if (patch.dateLabel !== undefined) dbPatch.date_label = patch.dateLabel;
+  if (patch.timeLabel !== undefined) dbPatch.time_label = patch.timeLabel;
+  if (patch.datetimeUtc !== undefined) dbPatch.datetime_utc = patch.datetimeUtc;
+  if (patch.durationLabel !== undefined) dbPatch.duration_label = patch.durationLabel;
+  if (patch.zoomWebinarId !== undefined) dbPatch.zoom_webinar_id = patch.zoomWebinarId;
+  if (patch.whatsappTemplateName !== undefined) dbPatch.whatsapp_template_name = patch.whatsappTemplateName;
+  if (patch.lsqSourceName !== undefined) dbPatch.lsq_source_name = patch.lsqSourceName;
+  if (patch.metaEventSuffix !== undefined) dbPatch.meta_event_suffix = patch.metaEventSuffix;
+
+  const { data, error } = await client()
+    .from('webinar_sessions')
+    .update(dbPatch)
+    .eq('id', id)
+    .select('*')
+    .single<WebinarSessionRow>();
+  if (error) throw error;
+  return mapSession(data);
+}
+
 // ── Zoom attendance sync helpers ───────────────────────────────────────────
 
 /**
- * Returns all Verified registrations — the universe of users who could
- * have attended. Returned rows include their current attended/synced state
- * so the sync route can decide whether to fire Meta CAPI (idempotent).
+ * Returns all Verified registrations for a given session — the universe of
+ * users who could have attended that webinar. Returned rows include their
+ * current attended/synced state so the sync route can decide whether to fire
+ * Meta CAPI (idempotent).
+ *
+ * If sessionId is null, returns rows that don't have any session_id either
+ * (legacy / pre-sessions data).
  */
-export async function getVerifiedRegistrationsForAttendanceSync(): Promise<Registration[]> {
+export async function getVerifiedRegistrationsForAttendanceSync(
+  sessionId: string | null,
+): Promise<Registration[]> {
   try {
-    const { data, error } = await client()
-      .from('registrations')
-      .select('*')
-      .eq('status', 'Verified');
+    let query = client().from('registrations').select('*').eq('status', 'Verified');
+    if (sessionId) query = query.eq('session_id', sessionId);
+    else query = query.is('session_id', null);
+    const { data, error } = await query;
     if (error) throw error;
     return (data ?? []).map(mapRegistration);
   } catch (err) {
