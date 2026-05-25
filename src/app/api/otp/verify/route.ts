@@ -62,8 +62,9 @@ export async function POST(req: NextRequest) {
     await updateLeadSquaredToVerified(phone);
 
     // 4. Save to Local DB (for Admin Portal). If the send route already
-    // inserted an Unverified row, just promote it to Verified. Otherwise
-    // insert a fresh Verified row as a fallback (handles old tokens).
+    // inserted an Unverified row, just promote it to Verified (and stamp
+    // verified_at). Otherwise insert a fresh Verified row as a fallback
+    // (handles old tokens that pre-date registration row insertion).
     const verifiedPayload = {
       fullName,
       email,

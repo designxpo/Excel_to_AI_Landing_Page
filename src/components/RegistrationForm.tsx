@@ -27,6 +27,9 @@ export interface RegistrationFormCopy {
   otpSubtitleTemplate?: string | null;
   otpEditDetailsLabel?: string | null;
   otpVerifyButtonText?: string | null;
+  otpResendLabel?: string | null;
+  otpHelpText?: string | null;
+  otpHelpWhatsappNumber?: string | null;
   successHeading?: string | null;
   successBody?: string | null;
 }
@@ -76,6 +79,9 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
   const otpSubtitle    = (copy.otpSubtitleTemplate ?? "We've sent a 4-digit code to {phone} via WhatsApp.");
   const otpEditLabel   = copy.otpEditDetailsLabel  ?? 'Edit Details';
   const otpVerifyText  = copy.otpVerifyButtonText  ?? 'Verify & Complete →';
+  const otpResendLabel = copy.otpResendLabel       ?? 'Resend code';
+  const otpHelpText    = copy.otpHelpText          ?? 'Still no code? WhatsApp our team for help';
+  const otpHelpWaNumber = (copy.otpHelpWhatsappNumber ?? '').replace(/\D/g, '');
   const successHeading = copy.successHeading       ?? "You're Registered!";
   const successBody    = copy.successBody          ?? 'Check your WhatsApp and Email for the Zoom link. We look forward to seeing you there!';
 
@@ -88,6 +94,8 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [resendTimer, setResendTimer] = useState(0);
+  const [isResending, setIsResending] = useState(false);
+  const [resendNotice, setResendNotice] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
 
   const buildThankYouUrl = (extras: { zoomJoinUrl?: string } = {}) => {
     const params = new URLSearchParams();
@@ -391,6 +399,43 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
     }
   };
 
+  // Resend OTP — uses /api/otp/resend so we don't create a new registration
+  // row, re-push to LSQ/Sheets, or refire the Lead pixel. Only effect is a
+  // fresh WhatsApp send + refreshed token.
+  const handleResend = async () => {
+    if (resendTimer > 0 || isResending || !token) return;
+    setIsResending(true);
+    setResendNotice(null);
+    setError("");
+    try {
+      const res = await fetch("/api/otp/resend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      });
+      const result = await res.json();
+      if (result.success && result.token) {
+        setToken(result.token);
+        setOtp("");
+        setResendTimer(60);
+        setResendNotice({ kind: 'ok', text: 'New code sent. Check WhatsApp.' });
+        setTimeout(() => setResendNotice(null), 6000);
+      } else {
+        setResendNotice({
+          kind: 'err',
+          text: 'Could not send a new code. Try the WhatsApp help link below.',
+        });
+      }
+    } catch {
+      setResendNotice({
+        kind: 'err',
+        text: 'Connection error. Try the WhatsApp help link below.',
+      });
+    } finally {
+      setIsResending(false);
+    }
+  };
+
   if (isSuccess) {
     return (
       <div className="bg-[#00DF83]/10 text-[#003368] p-8 rounded-2xl text-center border border-[#00DF83]/30">
@@ -404,7 +449,7 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
   if (isOtpStep) {
     return (
       <div className="animate-in slide-in-from-right duration-300">
-        <button type="button" onClick={() => setIsOtpStep(false)} className="text-[10px] text-slate-500 mb-6 flex items-center gap-1 font-semibold"><ArrowLeft className="w-3 h-3" /> {otpEditLabel}</button>
+        <button type="button" onClick={() => { setIsOtpStep(false); setResendNotice(null); setError(""); }} className="text-[10px] text-slate-500 mb-6 flex items-center gap-1 font-semibold"><ArrowLeft className="w-3 h-3" /> {otpEditLabel}</button>
         <h3 className="text-lg font-bold text-[#003368] mb-1">{otpHeading}</h3>
         <p className="text-xs text-slate-500 mb-6">{otpSubtitle.replace('{phone}', formData.phone)}</p>
         <form onSubmit={handleOtpSubmit} className="space-y-6">
@@ -421,6 +466,49 @@ export function RegistrationForm({ typeFilter = "PPC-SM", copy = {} }: Registrat
           <button type="submit" disabled={isLoading || otp.length < 4} className="w-full bg-[#00DF83] text-[#003368] font-bold py-4 rounded-xl shadow-lg shadow-[#00DF83]/20 disabled:opacity-50">
             {isLoading ? <Loader2 className="animate-spin mx-auto" /> : otpVerifyText}
           </button>
+
+          {/* Resend code — visible at all times. Disabled during the 60s
+              cooldown and shows a countdown so the user knows when they can
+              try again. Replaces the "click Edit Details + resubmit entire
+              form" anti-pattern. */}
+          <div className="flex items-center justify-center gap-1 text-xs text-slate-500">
+            <span>Didn&apos;t get the code?</span>
+            <button
+              type="button"
+              onClick={handleResend}
+              disabled={resendTimer > 0 || isResending}
+              className="font-semibold text-[#003368] underline-offset-2 hover:underline disabled:no-underline disabled:text-slate-400 disabled:cursor-not-allowed"
+            >
+              {isResending
+                ? 'Sending…'
+                : resendTimer > 0
+                  ? `${otpResendLabel} in ${resendTimer}s`
+                  : otpResendLabel}
+            </button>
+          </div>
+
+          {resendNotice && (
+            <p className={`text-xs text-center ${resendNotice.kind === 'ok' ? 'text-[#00875A]' : 'text-red-500'}`}>
+              {resendNotice.text}
+            </p>
+          )}
+
+          {/* WhatsApp helpline. Only renders when an admin has set a number.
+              wa.me deep-links open WhatsApp on mobile and WhatsApp Web on
+              desktop. The pre-filled message includes the user's phone so
+              support can look them up immediately. */}
+          {otpHelpWaNumber && (
+            <div className="text-center">
+              <a
+                href={`https://wa.me/${otpHelpWaNumber}?text=${encodeURIComponent(`Hi, I registered with phone ${formData.phone} but didn't receive the OTP. Can you help?`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-xs text-[#003368] underline underline-offset-2 hover:text-[#00875A]"
+              >
+                {otpHelpText} →
+              </a>
+            </div>
+          )}
         </form>
       </div>
     );

@@ -5,6 +5,7 @@ import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/z
 // event_id here and return it to the client so the browser pixel and Stape
 // use the same id for dedup.
 import { findRegistrationByEmailOrPhone, getWebinarConfig, addUnverifiedRegistration } from '@/lib/db';
+import { sendWhatsAppOtp } from '@/lib/whatsapp';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -91,33 +92,6 @@ async function pushToGoogleSheets(body: any, cleanPhone: string, otpStatus: stri
   }
 }
 
-async function sendWhatsAppOtp(phone: string, otp: string, templateName: string): Promise<boolean> {
-  const waAccessToken = process.env.META_WA_ACCESS_TOKEN;
-  const waPhoneId = process.env.META_WA_PHONE_NUMBER_ID;
-  if (!waAccessToken || !waPhoneId) return false;
-
-  try {
-    const waRes = await fetch(`https://graph.facebook.com/v17.0/${waPhoneId}/messages`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${waAccessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        to: `91${phone}`,
-        type: 'template',
-        template: {
-          name: templateName,
-          language: { code: 'en_US' },
-          components: [{ type: 'body', parameters: [{ type: 'text', text: otp }] }],
-        },
-      }),
-    });
-    return waRes.ok;
-  } catch (err) {
-    console.error('[WhatsApp] Error:', err);
-    return false;
-  }
-}
-
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
@@ -159,7 +133,7 @@ export async function POST(req: NextRequest) {
     // 2. Run WhatsApp + Zoom registration in parallel
     const whatsappTemplate = config?.whatsappTemplateName?.trim() || 'form_otp';
     const zoomWebinarOverride = config?.zoomWebinarId?.trim() || null;
-    const [waSuccess, zoomResult]: [boolean, ZoomRegistrationResult] = await Promise.all([
+    const [waResult, zoomResult]: [Awaited<ReturnType<typeof sendWhatsAppOtp>>, ZoomRegistrationResult] = await Promise.all([
       sendWhatsAppOtp(phone, otp, whatsappTemplate),
       registerWebinarParticipant({
         email,
@@ -171,6 +145,7 @@ export async function POST(req: NextRequest) {
       }),
     ]);
 
+    const waSuccess = waResult.status === 'sent';
     const otpStatus = waSuccess ? 'Unverified' : 'Fallback';
     const zoomJoinUrl = zoomResult.ok ? zoomResult.joinUrl : '';
     const zoomSyncStatus = zoomResult.ok ? 'Success' : 'Failed';
@@ -184,9 +159,18 @@ export async function POST(req: NextRequest) {
 
     // 3. Insert Unverified registration row. We get back its id so /verify
     // can promote the same row to 'Verified' rather than inserting a duplicate.
+    // Telemetry (WhatsApp status + error + attempt #) is stored on the row
+    // so the admin panel can show WHY each user is stuck.
     let registrationId: string | null = null;
     try {
-      const created = await addUnverifiedRegistration({ fullName, email, phone, city });
+      const created = await addUnverifiedRegistration({
+        fullName,
+        email,
+        phone,
+        city,
+        whatsappStatus: waResult.status,
+        whatsappError: waResult.error,
+      });
       registrationId = created.id;
     } catch (regErr) {
       console.error('[Registrations] Failed to insert unverified row:', regErr);

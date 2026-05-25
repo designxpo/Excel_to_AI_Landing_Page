@@ -54,6 +54,7 @@ type WebinarConfig = {
   formStatusOptions: string | null; formReferralOptions: string | null;
   otpHeading: string | null; otpSubtitleTemplate: string | null;
   otpEditDetailsLabel: string | null; otpVerifyButtonText: string | null;
+  otpResendLabel: string | null; otpHelpText: string | null; otpHelpWhatsappNumber: string | null;
   successHeading: string | null; successBody: string | null;
   facultyChip1: string | null; facultyChip2: string | null; facultyChip3: string | null;
   partnershipImageAlt: string | null;
@@ -591,24 +592,57 @@ export default function AdminPortal() {
                           <th className="px-6 py-3 font-semibold">Email</th>
                           <th className="px-6 py-3 font-semibold">Phone</th>
                           <th className="px-6 py-3 font-semibold">Status</th>
+                          <th className="px-6 py-3 font-semibold" title="Which attempt this row represents for the same email/phone">Attempt</th>
+                          <th className="px-6 py-3 font-semibold" title="WhatsApp send-API result (200=sent, api_failed=Meta rejected, skipped=env not configured)">WA Send</th>
+                          <th className="px-6 py-3 font-semibold">Verified At</th>
                           <th className="px-6 py-3 font-semibold">City</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {registrations.map(reg => (
-                          <tr key={reg.id} className="hover:bg-slate-50 transition-colors">
-                            <td className="px-6 py-4 text-slate-500">{new Date(reg.createdAt).toLocaleString()}</td>
-                            <td className="px-6 py-4 font-medium text-[#003368]">{reg.fullName}</td>
-                            <td className="px-6 py-4 text-slate-600">{reg.email}</td>
-                            <td className="px-6 py-4 text-slate-600">{reg.phone}</td>
-                            <td className="px-6 py-4">
-                              <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${reg.status === 'Verified' ? 'bg-[#00DF83]/10 text-[#003368]' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
-                                {reg.status}
-                              </span>
-                            </td>
-                            <td className="px-6 py-4 text-slate-600">{reg.city || '-'}</td>
-                          </tr>
-                        ))}
+                        {registrations.map(reg => {
+                          const attempt = typeof reg.attemptNumber === 'number' ? reg.attemptNumber : null;
+                          const isRepeat = attempt !== null && attempt > 1;
+                          const waStatus: string | null = reg.whatsappStatus ?? null;
+                          const waError: string | null = reg.whatsappError ?? null;
+                          const verifiedAt: string | null = reg.verifiedAt ?? null;
+                          return (
+                            <tr key={reg.id} className={`hover:bg-slate-50 transition-colors ${isRepeat ? 'bg-amber-50/40' : ''}`}>
+                              <td className="px-6 py-4 text-slate-500">{new Date(reg.createdAt).toLocaleString()}</td>
+                              <td className="px-6 py-4 font-medium text-[#003368]">{reg.fullName}</td>
+                              <td className="px-6 py-4 text-slate-600">{reg.email}</td>
+                              <td className="px-6 py-4 text-slate-600">{reg.phone}</td>
+                              <td className="px-6 py-4">
+                                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold ${reg.status === 'Verified' ? 'bg-[#00DF83]/10 text-[#003368]' : 'bg-amber-50 text-amber-700 border border-amber-200'}`}>
+                                  {reg.status}
+                                </span>
+                              </td>
+                              <td className="px-6 py-4">
+                                {attempt === null ? (
+                                  <span className="text-slate-400">—</span>
+                                ) : (
+                                  <span className={`tabular-nums font-semibold ${isRepeat ? 'text-amber-700' : 'text-slate-500'}`}>#{attempt}</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4">
+                                {waStatus === 'sent' ? (
+                                  <span className="text-xs font-semibold text-[#00875A]">sent</span>
+                                ) : waStatus === 'api_failed' ? (
+                                  <span className="text-xs font-semibold text-red-600" title={waError ?? 'unknown error'}>
+                                    api_failed
+                                  </span>
+                                ) : waStatus === 'skipped' ? (
+                                  <span className="text-xs font-semibold text-slate-500">skipped</span>
+                                ) : (
+                                  <span className="text-slate-400">—</span>
+                                )}
+                              </td>
+                              <td className="px-6 py-4 text-slate-500 text-xs tabular-nums">
+                                {verifiedAt ? new Date(verifiedAt).toLocaleString() : '—'}
+                              </td>
+                              <td className="px-6 py-4 text-slate-600">{reg.city || '-'}</td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -962,6 +996,9 @@ export default function AdminPortal() {
                     <Field label="Subtitle (use {phone} to insert the number)" value={webinar.otpSubtitleTemplate ?? ''} onChange={v => updateWebinarField('otpSubtitleTemplate', v)} placeholder="We've sent a 4-digit code to {phone} via WhatsApp." />
                     <Field label="'Edit Details' link text" value={webinar.otpEditDetailsLabel ?? ''} onChange={v => updateWebinarField('otpEditDetailsLabel', v)} placeholder="Edit Details" />
                     <Field label="Verify button text" value={webinar.otpVerifyButtonText ?? ''} onChange={v => updateWebinarField('otpVerifyButtonText', v)} placeholder="Verify & Complete →" />
+                    <Field label="'Resend code' label" value={webinar.otpResendLabel ?? ''} onChange={v => updateWebinarField('otpResendLabel', v)} placeholder="Resend code" hint="Shown next to a countdown after first send." />
+                    <Field label="Help link text" value={webinar.otpHelpText ?? ''} onChange={v => updateWebinarField('otpHelpText', v)} placeholder="Still no code? WhatsApp our team for help" hint="Optional. Renders only if the support number below is set." />
+                    <Field label="Support WhatsApp number (with country code, digits only)" value={webinar.otpHelpWhatsappNumber ?? ''} onChange={v => updateWebinarField('otpHelpWhatsappNumber', v.replace(/\D/g, ''))} placeholder="919999999999" hint="E.g. 919876543210. Leave blank to hide the help link." />
                   </WebinarSection>
 
                   <WebinarSection title="Success Screen (after OTP verified)">

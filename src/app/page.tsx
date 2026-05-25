@@ -166,6 +166,9 @@ export default async function MasterclassLandingPage() {
     otpSubtitleTemplate: config.otpSubtitleTemplate,
     otpEditDetailsLabel: config.otpEditDetailsLabel,
     otpVerifyButtonText: config.otpVerifyButtonText,
+    otpResendLabel: config.otpResendLabel,
+    otpHelpText: config.otpHelpText,
+    otpHelpWhatsappNumber: config.otpHelpWhatsappNumber,
     successHeading: config.successHeading,
     successBody: config.successBody,
   };

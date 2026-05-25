@@ -15,6 +15,13 @@ export interface Registration {
   status: string;
   city: string;
   createdAt: string;
+  // OTP telemetry — optional in callers (legacy rows, register API, etc.)
+  // but always present on rows read back from the DB (mapRegistration fills
+  // these from the row, defaulting to null if the column is null/missing).
+  whatsappStatus?: string | null;
+  whatsappError?: string | null;
+  verifiedAt?: string | null;
+  attemptNumber?: number | null;
 }
 
 export interface Faq {
@@ -152,6 +159,9 @@ type SettingsRow = {
   otp_subtitle_template?: string | null;
   otp_edit_details_label?: string | null;
   otp_verify_button_text?: string | null;
+  otp_resend_label?: string | null;
+  otp_help_text?: string | null;
+  otp_help_whatsapp_number?: string | null;
   success_heading?: string | null;
   success_body?: string | null;
   faculty_chip_1?: string | null;
@@ -287,6 +297,9 @@ export interface WebinarConfig extends SpeakerSettings {
   otpSubtitleTemplate: string | null;
   otpEditDetailsLabel: string | null;
   otpVerifyButtonText: string | null;
+  otpResendLabel: string | null;
+  otpHelpText: string | null;
+  otpHelpWhatsappNumber: string | null;
   successHeading: string | null;
   successBody: string | null;
   facultyChip1: string | null;
@@ -359,6 +372,10 @@ type RegistrationRow = {
   status: string;
   city: string;
   created_at: string;
+  whatsapp_status?: string | null;
+  whatsapp_error?: string | null;
+  verified_at?: string | null;
+  attempt_number?: number | null;
 };
 
 type FaqRow = {
@@ -386,6 +403,10 @@ function mapRegistration(row: RegistrationRow): Registration {
     status: row.status,
     city: row.city,
     createdAt: row.created_at,
+    whatsappStatus: row.whatsapp_status ?? null,
+    whatsappError: row.whatsapp_error ?? null,
+    verifiedAt: row.verified_at ?? null,
+    attemptNumber: row.attempt_number ?? null,
   };
 }
 
@@ -505,6 +526,9 @@ function mapWebinarConfig(row: SettingsRow): WebinarConfig {
     otpSubtitleTemplate: row.otp_subtitle_template ?? null,
     otpEditDetailsLabel: row.otp_edit_details_label ?? null,
     otpVerifyButtonText: row.otp_verify_button_text ?? null,
+    otpResendLabel: row.otp_resend_label ?? null,
+    otpHelpText: row.otp_help_text ?? null,
+    otpHelpWhatsappNumber: row.otp_help_whatsapp_number ?? null,
     successHeading: row.success_heading ?? null,
     successBody: row.success_body ?? null,
     facultyChip1: row.faculty_chip_1 ?? null,
@@ -638,10 +662,39 @@ export async function findRegistrationByEmailOrPhone(
 /**
  * Inserts an unverified lead. Returns the new registration's id so the caller
  * can embed it in the OTP token and later mark it verified.
+ *
+ * Captures OTP delivery telemetry (whatsappStatus / whatsappError) and
+ * auto-computes attemptNumber as (count of prior rows for this email or
+ * phone) + 1, so the admin panel can show "this is the user's 3rd attempt".
  */
 export async function addUnverifiedRegistration(
-  reg: Omit<Registration, 'id' | 'createdAt' | 'status'>,
+  reg: Omit<Registration, 'id' | 'createdAt' | 'status' | 'attemptNumber'> & {
+    whatsappStatus?: string | null;
+    whatsappError?: string | null;
+  },
 ): Promise<Registration> {
+  const supabase = client();
+
+  // Compute the user's attempt number (best-effort — defaults to 1 if the
+  // count query fails for any reason).
+  let attemptNumber = 1;
+  try {
+    const normEmail = (reg.email ?? '').trim().toLowerCase();
+    const normPhone = (reg.phone ?? '').replace(/\D/g, '');
+    const orClause: string[] = [];
+    if (normEmail) orClause.push(`email.ilike.${normEmail}`);
+    if (normPhone) orClause.push(`phone.eq.${normPhone}`);
+    if (orClause.length) {
+      const { count } = await supabase
+        .from('registrations')
+        .select('*', { count: 'exact', head: true })
+        .or(orClause.join(','));
+      if (typeof count === 'number') attemptNumber = count + 1;
+    }
+  } catch (err) {
+    console.error('[db.addUnverifiedRegistration] attempt count failed:', err);
+  }
+
   const row: RegistrationRow = {
     id: shortId(),
     full_name: reg.fullName,
@@ -650,8 +703,12 @@ export async function addUnverifiedRegistration(
     status: 'Unverified',
     city: reg.city,
     created_at: new Date().toISOString(),
+    whatsapp_status: reg.whatsappStatus ?? null,
+    whatsapp_error: reg.whatsappError ?? null,
+    verified_at: null,
+    attempt_number: attemptNumber,
   };
-  const { error } = await client().from('registrations').insert(row);
+  const { error } = await supabase.from('registrations').insert(row);
   if (error) throw error;
   return mapRegistration(row);
 }
@@ -668,7 +725,7 @@ export async function markRegistrationVerified(
   const supabase = client();
   const { data, error } = await supabase
     .from('registrations')
-    .update({ status: 'Verified' })
+    .update({ status: 'Verified', verified_at: new Date().toISOString() })
     .eq('id', id)
     .select()
     .maybeSingle<RegistrationRow>();
@@ -752,6 +809,7 @@ export async function getRegistrationsPaginated(
 }
 
 export async function addRegistration(reg: Omit<Registration, 'id' | 'createdAt'>): Promise<Registration> {
+  const isVerified = reg.status === 'Verified';
   const row: RegistrationRow = {
     id: shortId(),
     full_name: reg.fullName,
@@ -760,6 +818,10 @@ export async function addRegistration(reg: Omit<Registration, 'id' | 'createdAt'
     status: reg.status,
     city: reg.city,
     created_at: new Date().toISOString(),
+    whatsapp_status: reg.whatsappStatus ?? null,
+    whatsapp_error: reg.whatsappError ?? null,
+    verified_at: isVerified ? (reg.verifiedAt ?? new Date().toISOString()) : (reg.verifiedAt ?? null),
+    attempt_number: reg.attemptNumber ?? 1,
   };
   const { error } = await client().from('registrations').insert(row);
   if (error) throw error;
@@ -997,6 +1059,9 @@ export async function updateWebinarConfig(
   set('otpSubtitleTemplate', 'otp_subtitle_template');
   set('otpEditDetailsLabel', 'otp_edit_details_label');
   set('otpVerifyButtonText', 'otp_verify_button_text');
+  set('otpResendLabel', 'otp_resend_label');
+  set('otpHelpText', 'otp_help_text');
+  set('otpHelpWhatsappNumber', 'otp_help_whatsapp_number');
   set('successHeading', 'success_heading');
   set('successBody', 'success_body');
   set('facultyChip1', 'faculty_chip_1');
