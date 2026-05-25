@@ -38,8 +38,11 @@ export type MetaUserData = {
   externalId?: string;     // e.g. internal user id; hashed
 };
 
+// Standard Meta event names + an open string for custom events (e.g.
+// WebinarAttended). Meta accepts arbitrary event_name strings for custom
+// conversions configured in Events Manager.
 export type MetaCapiEvent = {
-  eventName: 'Lead' | 'CompleteRegistration' | 'PageView' | 'ViewContent';
+  eventName: 'Lead' | 'CompleteRegistration' | 'PageView' | 'ViewContent' | (string & {});
   eventId: string;         // MUST match the eventID used by the browser pixel for dedup
   eventTime?: number;      // unix seconds; defaults to now
   eventSourceUrl?: string; // the URL the user is on

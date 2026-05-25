@@ -95,6 +95,29 @@ export default function AdminPortal() {
   const [regTotal, setRegTotal] = useState(0);
   const [regStats, setRegStats] = useState<{ total: number; verified: number; unverified: number; uniqueEmailsStarted: number; uniqueEmailsVerified: number } | null>(null);
 
+  // Attendance sync state
+  const [isSyncingAttendance, setIsSyncingAttendance] = useState(false);
+  const [attendanceSyncMessage, setAttendanceSyncMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+  const [latestAttendanceSync, setLatestAttendanceSync] = useState<{
+    ranAt: string;
+    attendeesTotal: number;
+    newlyMarked: number;
+    metaFired: number;
+    lsqUpdated: number;
+    errorSummary: string | null;
+  } | null>(null);
+
+  // Dedupe state
+  type DedupePreview = {
+    totalGroups: number;
+    totalToDelete: number;
+    sampleGroups: Array<{ keeperEmail: string; keeperStatus: string; duplicateCount: number }>;
+  };
+  const [dedupePreview, setDedupePreview] = useState<DedupePreview | null>(null);
+  const [isLoadingDedupe, setIsLoadingDedupe] = useState(false);
+  const [isApplyingDedupe, setIsApplyingDedupe] = useState(false);
+  const [dedupeMessage, setDedupeMessage] = useState<{ kind: 'ok' | 'err'; text: string } | null>(null);
+
   // FAQs State
   const [faqs, setFaqs] = useState<FaqItem[]>([]);
   const [isLoadingFaqs, setIsLoadingFaqs] = useState(false);
@@ -135,6 +158,88 @@ export default function AdminPortal() {
         setIsLoadingRegs(false);
       })
       .catch(() => setIsLoadingRegs(false));
+  };
+
+  const loadLatestAttendanceSync = () => {
+    fetch('/api/admin/zoom/sync-attendance')
+      .then(res => (res.ok ? res.json() : null))
+      .then((res: { latest: typeof latestAttendanceSync } | null) => {
+        if (res?.latest) setLatestAttendanceSync(res.latest);
+      })
+      .catch(() => undefined);
+  };
+
+  // Dedup flow: GET preview → user confirms → POST execute.
+  const handleStartDedupe = async () => {
+    setIsLoadingDedupe(true);
+    setDedupeMessage(null);
+    try {
+      const res = await fetch('/api/admin/registrations/dedupe');
+      const body = await res.json();
+      if (!res.ok || !body.success) throw new Error(body.error || `HTTP ${res.status}`);
+      setDedupePreview({
+        totalGroups: body.totalGroups,
+        totalToDelete: body.totalToDelete,
+        sampleGroups: body.sampleGroups ?? [],
+      });
+    } catch (err) {
+      setDedupeMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Preview failed' });
+    } finally {
+      setIsLoadingDedupe(false);
+    }
+  };
+
+  const handleConfirmDedupe = async () => {
+    if (!dedupePreview) return;
+    setIsApplyingDedupe(true);
+    setDedupeMessage(null);
+    try {
+      const res = await fetch('/api/admin/registrations/dedupe', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dryRun: false }),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || `HTTP ${res.status}`);
+      setDedupeMessage({
+        kind: body.success ? 'ok' : 'err',
+        text: body.success
+          ? `Deleted ${body.deleted} duplicate rows across ${body.totalGroups} unique users.`
+          : `Partial: deleted ${body.deleted}; errors: ${(body.failed || []).slice(0, 3).join(' | ')}`,
+      });
+      setDedupePreview(null);
+      // Refresh the table
+      loadRegistrations(regPage, regPageSize);
+    } catch (err) {
+      setDedupeMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Cleanup failed' });
+    } finally {
+      setIsApplyingDedupe(false);
+    }
+  };
+
+  const handleSyncAttendance = async () => {
+    if (isSyncingAttendance) return;
+    if (!confirm('Pull attendance from Zoom and fire Meta + LSQ updates? This is safe to re-run — Meta is deduped by event_id.')) return;
+    setIsSyncingAttendance(true);
+    setAttendanceSyncMessage(null);
+    try {
+      const res = await fetch('/api/admin/zoom/sync-attendance', { method: 'POST' });
+      const body = await res.json();
+      if (!res.ok || !body.success) {
+        throw new Error(body.error || `HTTP ${res.status}`);
+      }
+      setAttendanceSyncMessage({
+        kind: 'ok',
+        text: `Synced ${body.attendeesTotal} attendees · marked ${body.newlyMarked} new · fired ${body.metaFired} Meta events · updated ${body.lsqUpdated} LSQ leads`,
+      });
+      // Reload the table + sync summary
+      loadRegistrations(regPage, regPageSize);
+      loadLatestAttendanceSync();
+    } catch (err) {
+      setAttendanceSyncMessage({ kind: 'err', text: err instanceof Error ? err.message : 'Sync failed' });
+    } finally {
+      setIsSyncingAttendance(false);
+    }
   };
 
   const loadFaqs = () => {
@@ -194,7 +299,10 @@ export default function AdminPortal() {
   };
 
   useEffect(() => {
-    if (activeTab === "registrations") loadRegistrations(regPage, regPageSize);
+    if (activeTab === "registrations") {
+      loadRegistrations(regPage, regPageSize);
+      loadLatestAttendanceSync();
+    }
     if (activeTab === "faqs") loadFaqs();
     if (activeTab === "webinar") loadWebinar();
     if (activeTab === "features") loadFeatures();
@@ -557,12 +665,64 @@ export default function AdminPortal() {
           {/* Registrations Tab */}
           {activeTab === "registrations" && (
             <div>
-              <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
                 <h2 className="text-lg font-bold text-[#003368]">Student Registrations</h2>
-                <button onClick={() => loadRegistrations(regPage, regPageSize)} className="text-sm text-[#003368] font-semibold hover:underline">
-                  Refresh Data
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={handleSyncAttendance}
+                    disabled={isSyncingAttendance}
+                    className="text-sm bg-[#003368] hover:bg-[#002244] text-white font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-60"
+                    title="Pulls attendees from Zoom Reports API and fires Meta CAPI + LSQ updates. Run ~30 min after webinar ends. Safe to re-run."
+                  >
+                    {isSyncingAttendance ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Syncing…</>
+                    ) : (
+                      'Sync Attendance from Zoom'
+                    )}
+                  </button>
+                  <button
+                    onClick={handleStartDedupe}
+                    disabled={isLoadingDedupe}
+                    className="text-sm bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 font-semibold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-60"
+                    title="Find and delete duplicate registration rows. Shows a preview before deleting."
+                  >
+                    {isLoadingDedupe ? (
+                      <><Loader2 className="w-4 h-4 animate-spin" /> Scanning…</>
+                    ) : (
+                      'Clean Duplicates'
+                    )}
+                  </button>
+                  <button onClick={() => loadRegistrations(regPage, regPageSize)} className="text-sm text-[#003368] font-semibold hover:underline">
+                    Refresh Data
+                  </button>
+                </div>
               </div>
+
+              {/* Dedupe result banner */}
+              {dedupeMessage && (
+                <div className={`mb-4 p-3 rounded-lg text-sm border ${dedupeMessage.kind === 'ok' ? 'bg-[#00DF83]/10 text-[#003368] border-[#00DF83]/30' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  {dedupeMessage.text}
+                </div>
+              )}
+
+              {/* Attendance sync result banner */}
+              {attendanceSyncMessage && (
+                <div className={`mb-4 p-3 rounded-lg text-sm border ${attendanceSyncMessage.kind === 'ok' ? 'bg-[#00DF83]/10 text-[#003368] border-[#00DF83]/30' : 'bg-red-50 text-red-700 border-red-200'}`}>
+                  {attendanceSyncMessage.text}
+                </div>
+              )}
+
+              {/* Last sync timestamp */}
+              {latestAttendanceSync && (
+                <div className="mb-6 text-xs text-slate-500">
+                  Last attendance sync: <span className="font-semibold text-slate-700">{new Date(latestAttendanceSync.ranAt).toLocaleString()}</span>
+                  {' · '}
+                  {latestAttendanceSync.attendeesTotal} attendees · {latestAttendanceSync.metaFired} Meta events · {latestAttendanceSync.lsqUpdated} LSQ updates
+                  {latestAttendanceSync.errorSummary && (
+                    <span className="text-red-600" title={latestAttendanceSync.errorSummary}> · errors (hover)</span>
+                  )}
+                </div>
+              )}
 
               {/* Stats summary */}
               {regStats && (
@@ -595,6 +755,7 @@ export default function AdminPortal() {
                           <th className="px-6 py-3 font-semibold" title="Which attempt this row represents for the same email/phone">Attempt</th>
                           <th className="px-6 py-3 font-semibold" title="WhatsApp send-API result (200=sent, api_failed=Meta rejected, skipped=env not configured)">WA Send</th>
                           <th className="px-6 py-3 font-semibold">Verified At</th>
+                          <th className="px-6 py-3 font-semibold" title="Pulled from Zoom Reports API by the Sync Attendance button">Attended</th>
                           <th className="px-6 py-3 font-semibold">City</th>
                         </tr>
                       </thead>
@@ -638,6 +799,22 @@ export default function AdminPortal() {
                               </td>
                               <td className="px-6 py-4 text-slate-500 text-xs tabular-nums">
                                 {verifiedAt ? new Date(verifiedAt).toLocaleString() : '—'}
+                              </td>
+                              <td className="px-6 py-4">
+                                {reg.attended === true ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#00875A] bg-[#00DF83]/10 px-2 py-0.5 rounded-full" title={reg.attendanceDurationMin ? `${reg.attendanceDurationMin} min` : undefined}>
+                                    Attended
+                                    {typeof reg.attendanceDurationMin === 'number' && reg.attendanceDurationMin > 0 && (
+                                      <span className="text-slate-500 font-normal"> · {reg.attendanceDurationMin}m</span>
+                                    )}
+                                  </span>
+                                ) : reg.attended === false ? (
+                                  <span className="inline-flex items-center text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">
+                                    No-show
+                                  </span>
+                                ) : (
+                                  <span className="text-slate-400 text-xs">—</span>
+                                )}
                               </td>
                               <td className="px-6 py-4 text-slate-600">{reg.city || '-'}</td>
                             </tr>
@@ -691,6 +868,72 @@ export default function AdminPortal() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {/* Dedup preview modal */}
+              {dedupePreview && (
+                <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+                  <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-200">
+                      <h3 className="font-bold text-[#003368]">Clean duplicate registrations</h3>
+                    </div>
+                    <div className="p-6 space-y-4">
+                      {dedupePreview.totalToDelete === 0 ? (
+                        <div className="text-sm text-slate-600">
+                          No duplicates found. Every row already has a unique email + phone combination.
+                        </div>
+                      ) : (
+                        <>
+                          <div className="text-sm text-slate-700">
+                            Found <span className="font-bold text-[#003368]">{dedupePreview.totalGroups}</span> users with duplicate rows.
+                            About to delete <span className="font-bold text-red-600">{dedupePreview.totalToDelete}</span> rows total.
+                          </div>
+                          <div className="text-xs text-slate-500">
+                            For each duplicate user, the system keeps the <span className="font-semibold">Verified</span> row if any,
+                            otherwise the <span className="font-semibold">most recent Unverified</span> row (preserves the latest telemetry).
+                          </div>
+                          {dedupePreview.sampleGroups.length > 0 && (
+                            <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 max-h-48 overflow-y-auto">
+                              <div className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">First {dedupePreview.sampleGroups.length} of {dedupePreview.totalGroups}</div>
+                              <ul className="space-y-1 text-xs font-mono text-slate-600">
+                                {dedupePreview.sampleGroups.map((g, i) => (
+                                  <li key={i} className="flex items-center justify-between">
+                                    <span className="truncate">{g.keeperEmail}</span>
+                                    <span className="text-slate-400 ml-2 shrink-0">
+                                      keep {g.keeperStatus} · delete {g.duplicateCount}
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-end gap-3">
+                      <button
+                        onClick={() => setDedupePreview(null)}
+                        disabled={isApplyingDedupe}
+                        className="text-sm font-semibold text-slate-500 hover:text-slate-700 disabled:opacity-60"
+                      >
+                        Cancel
+                      </button>
+                      {dedupePreview.totalToDelete > 0 && (
+                        <button
+                          onClick={handleConfirmDedupe}
+                          disabled={isApplyingDedupe}
+                          className="text-sm bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg flex items-center gap-2 disabled:opacity-60"
+                        >
+                          {isApplyingDedupe ? (
+                            <><Loader2 className="w-4 h-4 animate-spin" /> Deleting…</>
+                          ) : (
+                            `Delete ${dedupePreview.totalToDelete} rows`
+                          )}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
               )}
             </div>
           )}

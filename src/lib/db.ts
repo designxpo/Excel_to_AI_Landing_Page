@@ -22,6 +22,12 @@ export interface Registration {
   whatsappError?: string | null;
   verifiedAt?: string | null;
   attemptNumber?: number | null;
+  // Attendance (populated by /api/admin/zoom/sync-attendance)
+  attended?: boolean | null;
+  attendedAt?: string | null;
+  attendanceDurationMin?: number | null;
+  attendanceSyncedAt?: string | null;
+  metaAttendedEventFired?: boolean | null;
 }
 
 export interface Faq {
@@ -376,6 +382,11 @@ type RegistrationRow = {
   whatsapp_error?: string | null;
   verified_at?: string | null;
   attempt_number?: number | null;
+  attended?: boolean | null;
+  attended_at?: string | null;
+  attendance_duration_min?: number | null;
+  attendance_synced_at?: string | null;
+  meta_attended_event_fired?: boolean | null;
 };
 
 type FaqRow = {
@@ -407,6 +418,11 @@ function mapRegistration(row: RegistrationRow): Registration {
     whatsappError: row.whatsapp_error ?? null,
     verifiedAt: row.verified_at ?? null,
     attemptNumber: row.attempt_number ?? null,
+    attended: row.attended ?? null,
+    attendedAt: row.attended_at ?? null,
+    attendanceDurationMin: row.attendance_duration_min ?? null,
+    attendanceSyncedAt: row.attendance_synced_at ?? null,
+    metaAttendedEventFired: row.meta_attended_event_fired ?? null,
   };
 }
 
@@ -1298,5 +1314,245 @@ export async function countAdminUsers(): Promise<number> {
     .select('*', { count: 'exact', head: true });
   if (error) throw error;
   return count ?? 0;
+}
+
+// ── Zoom attendance sync helpers ───────────────────────────────────────────
+
+/**
+ * Returns all Verified registrations — the universe of users who could
+ * have attended. Returned rows include their current attended/synced state
+ * so the sync route can decide whether to fire Meta CAPI (idempotent).
+ */
+export async function getVerifiedRegistrationsForAttendanceSync(): Promise<Registration[]> {
+  try {
+    const { data, error } = await client()
+      .from('registrations')
+      .select('*')
+      .eq('status', 'Verified');
+    if (error) throw error;
+    return (data ?? []).map(mapRegistration);
+  } catch (err) {
+    console.error('[db.getVerifiedRegistrationsForAttendanceSync]', err);
+    return [];
+  }
+}
+
+export type AttendanceUpdate = {
+  id: string;
+  attended: boolean;
+  attendedAt?: string | null;
+  attendanceDurationMin?: number | null;
+  metaAttendedEventFired?: boolean;
+};
+
+export async function updateRegistrationAttendance(patch: AttendanceUpdate): Promise<void> {
+  const dbPatch: Record<string, unknown> = {
+    attended: patch.attended,
+    attendance_synced_at: new Date().toISOString(),
+  };
+  if (patch.attendedAt !== undefined) dbPatch.attended_at = patch.attendedAt;
+  if (patch.attendanceDurationMin !== undefined) dbPatch.attendance_duration_min = patch.attendanceDurationMin;
+  if (patch.metaAttendedEventFired !== undefined) dbPatch.meta_attended_event_fired = patch.metaAttendedEventFired;
+
+  const { error } = await client()
+    .from('registrations')
+    .update(dbPatch)
+    .eq('id', patch.id);
+  if (error) throw error;
+}
+
+export type AttendanceSyncRun = {
+  ranAt: string;
+  ranBy: string | null;
+  webinarId: string | null;
+  attendeesTotal: number;
+  newlyMarked: number;
+  metaFired: number;
+  lsqUpdated: number;
+  errorSummary: string | null;
+};
+
+export async function recordAttendanceSyncRun(run: AttendanceSyncRun): Promise<void> {
+  const { error } = await client()
+    .from('attendance_sync_runs')
+    .insert({
+      ran_at: run.ranAt,
+      ran_by: run.ranBy,
+      webinar_id: run.webinarId,
+      attendees_total: run.attendeesTotal,
+      newly_marked: run.newlyMarked,
+      meta_fired: run.metaFired,
+      lsq_updated: run.lsqUpdated,
+      error_summary: run.errorSummary,
+    });
+  if (error) {
+    // Audit log failure is non-critical — the actual sync already updated
+    // registrations. Just log.
+    console.error('[db.recordAttendanceSyncRun]', error);
+  }
+}
+
+// ── Duplicate cleanup ──────────────────────────────────────────────────────
+
+export type DedupePlan = {
+  // Rows that would be deleted, grouped by their "keeper" row id.
+  // Useful for the UI dry-run preview.
+  groups: Array<{
+    keeperId: string;
+    keeperEmail: string;
+    keeperStatus: string;
+    deleteIds: string[];
+  }>;
+  totalToDelete: number;
+  totalGroups: number;
+};
+
+/**
+ * Identifies duplicate registration rows. Two rows are considered duplicates
+ * when EITHER their normalized email OR their digits-only phone match. The
+ * "keeper" within each group is chosen as:
+ *   1. Any Verified row (there's at most one in practice — we already block
+ *      duplicate Verified inserts at the send route)
+ *   2. Otherwise the most recently created Unverified row (preserves the
+ *      latest attempt telemetry)
+ *
+ * Returns the plan WITHOUT performing any deletes so the UI can confirm.
+ */
+export async function previewDuplicateCleanup(): Promise<DedupePlan> {
+  const { data, error } = await client()
+    .from('registrations')
+    .select('id,email,phone,status,created_at')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  type Row = { id: string; email: string; phone: string; status: string; created_at: string };
+  const rows: Row[] = (data ?? []) as Row[];
+
+  const normEmail = (e: string) => (e ?? '').trim().toLowerCase();
+  const normPhone = (p: string) => (p ?? '').replace(/\D/g, '');
+
+  // Union-find to merge rows that share email OR phone into a single group.
+  const parent = new Map<string, string>();
+  const find = (id: string): string => {
+    let x = id;
+    while (parent.get(x) !== x) {
+      x = parent.get(x)!;
+    }
+    return x;
+  };
+  const union = (a: string, b: string) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent.set(ra, rb);
+  };
+
+  for (const r of rows) parent.set(r.id, r.id);
+
+  // Bucket by email and by phone; union members of each bucket.
+  const byEmail = new Map<string, string[]>();
+  const byPhone = new Map<string, string[]>();
+  for (const r of rows) {
+    const e = normEmail(r.email);
+    const p = normPhone(r.phone);
+    if (e) {
+      if (!byEmail.has(e)) byEmail.set(e, []);
+      byEmail.get(e)!.push(r.id);
+    }
+    if (p) {
+      if (!byPhone.has(p)) byPhone.set(p, []);
+      byPhone.get(p)!.push(r.id);
+    }
+  }
+  for (const ids of byEmail.values()) for (let i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+  for (const ids of byPhone.values()) for (let i = 1; i < ids.length; i++) union(ids[0], ids[i]);
+
+  // Collect groups; ignore groups of size 1 (nothing to dedupe).
+  const groups = new Map<string, Row[]>();
+  for (const r of rows) {
+    const root = find(r.id);
+    if (!groups.has(root)) groups.set(root, []);
+    groups.get(root)!.push(r);
+  }
+
+  const plan: DedupePlan = { groups: [], totalToDelete: 0, totalGroups: 0 };
+  for (const groupRows of groups.values()) {
+    if (groupRows.length < 2) continue;
+    // Sort: Verified first, then newest first within Unverified.
+    const sorted = [...groupRows].sort((a, b) => {
+      const av = a.status === 'Verified' ? 0 : 1;
+      const bv = b.status === 'Verified' ? 0 : 1;
+      if (av !== bv) return av - bv;
+      return b.created_at.localeCompare(a.created_at);
+    });
+    const keeper = sorted[0];
+    const deletes = sorted.slice(1);
+    plan.groups.push({
+      keeperId: keeper.id,
+      keeperEmail: keeper.email,
+      keeperStatus: keeper.status,
+      deleteIds: deletes.map((r) => r.id),
+    });
+    plan.totalToDelete += deletes.length;
+    plan.totalGroups += 1;
+  }
+
+  return plan;
+}
+
+/**
+ * Executes the dedupe plan computed by previewDuplicateCleanup. Runs deletes
+ * in batches of 500 to stay under PostgREST URL-length limits.
+ */
+export async function applyDuplicateCleanup(plan: DedupePlan): Promise<{ deleted: number; failed: string[] }> {
+  const allIds: string[] = plan.groups.flatMap((g) => g.deleteIds);
+  if (allIds.length === 0) return { deleted: 0, failed: [] };
+
+  const supabase = client();
+  const failed: string[] = [];
+  let deleted = 0;
+
+  const BATCH = 500;
+  for (let i = 0; i < allIds.length; i += BATCH) {
+    const slice = allIds.slice(i, i + BATCH);
+    const { error, count } = await supabase
+      .from('registrations')
+      .delete({ count: 'exact' })
+      .in('id', slice);
+    if (error) {
+      failed.push(error.message);
+    } else if (typeof count === 'number') {
+      deleted += count;
+    } else {
+      deleted += slice.length; // fall back to optimistic count
+    }
+  }
+
+  return { deleted, failed };
+}
+
+export async function getLatestAttendanceSyncRun(): Promise<AttendanceSyncRun | null> {
+  try {
+    const { data, error } = await client()
+      .from('attendance_sync_runs')
+      .select('*')
+      .order('ran_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) throw error;
+    if (!data) return null;
+    return {
+      ranAt: data.ran_at,
+      ranBy: data.ran_by ?? null,
+      webinarId: data.webinar_id ?? null,
+      attendeesTotal: data.attendees_total ?? 0,
+      newlyMarked: data.newly_marked ?? 0,
+      metaFired: data.meta_fired ?? 0,
+      lsqUpdated: data.lsq_updated ?? 0,
+      errorSummary: data.error_summary ?? null,
+    };
+  } catch (err) {
+    console.error('[db.getLatestAttendanceSyncRun]', err);
+    return null;
+  }
 }
 

@@ -145,3 +145,118 @@ export async function registerWebinarParticipant(
     return { ok: false, error: err instanceof Error ? err.message : String(err) };
   }
 }
+
+// ── Post-webinar attendance reporting ──────────────────────────────────────
+
+export type ZoomAttendee = {
+  email: string;          // lowercased for matching
+  name: string;
+  joinTime: string;       // ISO from Zoom
+  leaveTime: string | null;
+  durationMin: number;    // total minutes attended (sum across sessions if Zoom paginated)
+};
+
+export type ZoomAttendeesResult =
+  | { ok: true; attendees: ZoomAttendee[]; webinarId: string }
+  | { ok: false; error: string };
+
+/**
+ * Pulls participants from Zoom's Report API for a finished webinar.
+ *
+ * NOTES:
+ *   - Zoom's report data is only available ~30 minutes after the webinar ends.
+ *     Running this before then returns an empty list or a 400.
+ *   - The same person can appear multiple times if they joined-then-left-then-
+ *     rejoined. We dedupe by lowercase email and sum their durations.
+ *   - Requires the S2S OAuth app to have the scope:
+ *       report:read:admin (or report_participants:read:admin)
+ *     If you get a 4711 error, add that scope in Zoom Marketplace and revoke
+ *     existing tokens.
+ */
+export async function fetchWebinarAttendees(
+  webinarId?: string | null,
+): Promise<ZoomAttendeesResult> {
+  try {
+    const id = webinarId?.trim() || requireEnv('ZOOM_WEBINAR_ID');
+    if (!/^\d{9,12}$/.test(id)) {
+      return { ok: false, error: `Zoom webinar ID looks invalid (expected 9-12 digits): ${id}` };
+    }
+
+    const token = await getZoomAccessToken();
+
+    // Aggregate across pages — Zoom returns up to 300 participants per page.
+    type RawParticipant = {
+      id?: string;
+      user_id?: string;
+      name?: string;
+      user_email?: string;
+      join_time?: string;
+      leave_time?: string;
+      duration?: number; // SECONDS in /report/webinars endpoint
+    };
+    const collected: RawParticipant[] = [];
+    let nextPageToken = '';
+
+    do {
+      const url = new URL(`https://api.zoom.us/v2/report/webinars/${id}/participants`);
+      url.searchParams.set('page_size', '300');
+      if (nextPageToken) url.searchParams.set('next_page_token', nextPageToken);
+
+      const res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) {
+        if (res.status === 401) tokenCache = null;
+        const body = await res.json().catch(() => null);
+        return { ok: false, error: `Zoom report fetch failed: ${describeZoomError(res.status, body)}` };
+      }
+
+      const body = (await res.json().catch(() => null)) as {
+        participants?: RawParticipant[];
+        next_page_token?: string;
+      } | null;
+
+      if (!body) {
+        return { ok: false, error: 'Zoom returned 200 but body was not JSON' };
+      }
+
+      if (Array.isArray(body.participants)) collected.push(...body.participants);
+      nextPageToken = body.next_page_token || '';
+    } while (nextPageToken);
+
+    // Dedupe by lowercase email; sum durations across re-joins.
+    const byEmail = new Map<string, ZoomAttendee>();
+    for (const p of collected) {
+      const email = (p.user_email || '').trim().toLowerCase();
+      if (!email) continue; // skip anonymous joiners
+      const durSec = typeof p.duration === 'number' ? p.duration : 0;
+      const durMin = Math.round(durSec / 60);
+      const existing = byEmail.get(email);
+      if (existing) {
+        existing.durationMin += durMin;
+        if (p.join_time && p.join_time < existing.joinTime) existing.joinTime = p.join_time;
+        if (p.leave_time && (!existing.leaveTime || p.leave_time > existing.leaveTime)) {
+          existing.leaveTime = p.leave_time;
+        }
+      } else {
+        byEmail.set(email, {
+          email,
+          name: (p.name || '').trim(),
+          joinTime: p.join_time || new Date().toISOString(),
+          leaveTime: p.leave_time || null,
+          durationMin: durMin,
+        });
+      }
+    }
+
+    return { ok: true, attendees: Array.from(byEmail.values()), webinarId: id };
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+// Re-export the token cache invalidation hook so callers can reset on 401.
+// (Module-level `tokenCache` is already used internally; this comment is for
+// future maintainers — no extra export needed.)
+
