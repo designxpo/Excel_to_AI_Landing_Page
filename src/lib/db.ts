@@ -1852,3 +1852,512 @@ export async function getLatestAttendanceSyncRun(): Promise<AttendanceSyncRun | 
   }
 }
 
+// ─── Email campaigns ─────────────────────────────────────────────────────────
+
+export interface EmailCampaign {
+  id: string;
+  sessionId: string | null;
+  subject: string;
+  bodyText: string;
+  bodyHtml: string | null;
+  bannerUrl: string | null;
+  audience: 'verified' | 'unverified' | 'all';
+  status: 'draft' | 'sending' | 'sent' | 'partial' | 'failed';
+  totalRecipients: number;
+  sentCount: number;
+  failedCount: number;
+  openCount: number;
+  uniqueOpenCount: number;
+  clickCount: number;
+  autoSendEnabled: boolean;
+  autoSendAudience: 'verified' | 'unverified' | 'all' | null;
+  delayValue: number;
+  delayUnit: 'minutes' | 'hours' | 'days';
+  errorSummary: string | null;
+  createdAt: string;
+  sentAt: string | null;
+}
+
+export interface QueueItem {
+  id: string;
+  campaignId: string;
+  recipientEmail: string;
+  recipientName: string;
+  scheduledFor: string;
+  sentAt: string | null;
+  status: 'pending' | 'sent' | 'failed' | 'cancelled';
+  error: string | null;
+  createdAt: string;
+}
+
+export interface QueueSummary {
+  pendingCount: number;
+  sentCount: number;
+  failedCount: number;
+  nextScheduledFor: string | null;
+}
+
+export interface EmailRecipient {
+  email: string;
+  fullName: string;
+  phone: string;
+}
+
+function mapEmailCampaign(r: Record<string, unknown>): EmailCampaign {
+  return {
+    id: r.id as string,
+    sessionId: (r.session_id as string | null) ?? null,
+    subject: r.subject as string,
+    bodyText: r.body_text as string,
+    bodyHtml: (r.body_html as string | null) ?? null,
+    bannerUrl: (r.banner_url as string | null) ?? null,
+    audience: r.audience as EmailCampaign['audience'],
+    status: r.status as EmailCampaign['status'],
+    totalRecipients: (r.total_recipients as number) ?? 0,
+    sentCount: (r.sent_count as number) ?? 0,
+    failedCount: (r.failed_count as number) ?? 0,
+    openCount: (r.open_count as number) ?? 0,
+    uniqueOpenCount: (r.unique_open_count as number) ?? 0,
+    clickCount: (r.click_count as number) ?? 0,
+    autoSendEnabled: (r.auto_send_enabled as boolean) ?? false,
+    autoSendAudience: (r.auto_send_audience as 'verified' | 'unverified' | 'all' | null) ?? null,
+    delayValue: (r.delay_value as number) ?? 0,
+    delayUnit: ((r.delay_unit as string) ?? 'hours') as 'minutes' | 'hours' | 'days',
+    errorSummary: (r.error_summary as string | null) ?? null,
+    createdAt: r.created_at as string,
+    sentAt: (r.sent_at as string | null) ?? null,
+  };
+}
+
+export async function getEmailRecipients(
+  audience: 'verified' | 'unverified' | 'all',
+  sessionId?: string | null,
+): Promise<EmailRecipient[]> {
+  const supabase = client();
+  let q = supabase
+    .schema('excel_to_ai')
+    .from('registrations')
+    .select('email, full_name, phone');
+
+  if (audience === 'verified') {
+    q = q.eq('status', 'Verified');
+  } else if (audience === 'unverified') {
+    q = q.neq('status', 'Verified');
+  }
+
+  if (sessionId) {
+    q = q.eq('session_id', sessionId);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+
+  // Dedupe by email (keep first occurrence)
+  const seen = new Set<string>();
+  const recipients: EmailRecipient[] = [];
+  for (const r of data ?? []) {
+    const email = (r.email as string)?.toLowerCase().trim();
+    if (!email || seen.has(email)) continue;
+    seen.add(email);
+    recipients.push({ email: r.email as string, fullName: r.full_name as string, phone: r.phone as string });
+  }
+  return recipients;
+}
+
+export async function createEmailCampaign(params: {
+  sessionId?: string | null;
+  subject: string;
+  bodyText: string;
+  bodyHtml?: string | null;
+  bannerUrl?: string | null;
+  autoSendEnabled?: boolean;
+  autoSendAudience?: 'verified' | 'unverified' | 'all' | null;
+  delayValue?: number;
+  delayUnit?: 'minutes' | 'hours' | 'days';
+  audience: 'verified' | 'unverified' | 'all';
+  totalRecipients: number;
+  status?: EmailCampaign['status'];
+  sentCount?: number;
+  failedCount?: number;
+  errorSummary?: string | null;
+  sentAt?: string | null;
+}): Promise<EmailCampaign> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .insert({
+      session_id: params.sessionId ?? null,
+      subject: params.subject,
+      body_text: params.bodyText,
+      body_html: params.bodyHtml ?? null,
+      banner_url: params.bannerUrl ?? null,
+      audience: params.audience,
+      auto_send_enabled: params.autoSendEnabled ?? false,
+      auto_send_audience: params.autoSendAudience ?? null,
+      delay_value: params.delayValue ?? 0,
+      delay_unit: params.delayUnit ?? 'hours',
+      total_recipients: params.totalRecipients,
+      status: params.status ?? 'draft',
+      sent_count: params.sentCount ?? 0,
+      failed_count: params.failedCount ?? 0,
+      error_summary: params.errorSummary ?? null,
+      sent_at: params.sentAt ?? null,
+    })
+    .select()
+    .single();
+  if (error) throw error;
+  return mapEmailCampaign(data as Record<string, unknown>);
+}
+
+export async function updateEmailCampaign(
+  id: string,
+  updates: Partial<Pick<EmailCampaign, 'status' | 'sentCount' | 'failedCount' | 'errorSummary' | 'sentAt'>>,
+): Promise<void> {
+  const row: Record<string, unknown> = {};
+  if (updates.status      !== undefined) row.status        = updates.status;
+  if (updates.sentCount   !== undefined) row.sent_count    = updates.sentCount;
+  if (updates.failedCount !== undefined) row.failed_count  = updates.failedCount;
+  if (updates.errorSummary !== undefined) row.error_summary = updates.errorSummary;
+  if (updates.sentAt      !== undefined) row.sent_at       = updates.sentAt;
+  const { error } = await client()
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .update(row)
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function listEmailCampaigns(sessionId?: string | null): Promise<EmailCampaign[]> {
+  let q = client()
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (sessionId) {
+    q = q.eq('session_id', sessionId);
+  }
+
+  const { data, error } = await q;
+  if (error) throw error;
+  return (data ?? []).map(r => mapEmailCampaign(r as Record<string, unknown>));
+}
+
+export async function getEmailCampaignById(id: string): Promise<EmailCampaign | null> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .select('*')
+    .eq('id', id)
+    .maybeSingle();
+  if (error) throw error;
+  if (!data) return null;
+  return mapEmailCampaign(data as Record<string, unknown>);
+}
+
+// ── Email event tracking ─────────────────────────────────────────────────────
+
+export async function recordEmailOpen(campaignId: string, recipientHash: string): Promise<void> {
+  const supabase = client();
+
+  // Check if this recipient already opened (for unique count).
+  const { count: existingCount } = await supabase
+    .schema('excel_to_ai')
+    .from('email_events')
+    .select('id', { count: 'exact', head: true })
+    .eq('campaign_id', campaignId)
+    .eq('event_type', 'open')
+    .eq('recipient_hash', recipientHash);
+
+  const isFirstOpen = (existingCount ?? 0) === 0;
+
+  // Insert the raw event.
+  await supabase
+    .schema('excel_to_ai')
+    .from('email_events')
+    .insert({ campaign_id: campaignId, event_type: 'open', recipient_hash: recipientHash });
+
+  // Increment counters atomically via rpc (fallback: read-modify-write).
+  const inc: Record<string, number> = { open_count: 1 };
+  if (isFirstOpen) inc.unique_open_count = 1;
+
+  // Use a raw SQL expression through .rpc or a manual read-modify-write.
+  const { data: current } = await supabase
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .select('open_count, unique_open_count')
+    .eq('id', campaignId)
+    .maybeSingle();
+
+  if (current) {
+    await supabase
+      .schema('excel_to_ai')
+      .from('email_campaigns')
+      .update({
+        open_count: ((current as Record<string, number>).open_count ?? 0) + 1,
+        unique_open_count: ((current as Record<string, number>).unique_open_count ?? 0) + (isFirstOpen ? 1 : 0),
+      })
+      .eq('id', campaignId);
+  }
+}
+
+export interface EmailEventStats {
+  totalOpens: number;
+  uniqueOpens: number;
+  clickCount: number;
+  openRate: number;       // uniqueOpens / sentCount * 100
+  clickRate: number;      // clickCount / sentCount * 100
+  opensByHour: { hour: string; count: number }[];
+}
+
+export async function getEmailCampaignStats(campaignId: string): Promise<EmailEventStats> {
+  const supabase = client();
+
+  const [campaignRes, eventsRes] = await Promise.all([
+    supabase
+      .schema('excel_to_ai')
+      .from('email_campaigns')
+      .select('sent_count, open_count, unique_open_count, click_count')
+      .eq('id', campaignId)
+      .maybeSingle(),
+    supabase
+      .schema('excel_to_ai')
+      .from('email_events')
+      .select('event_type, occurred_at')
+      .eq('campaign_id', campaignId)
+      .order('occurred_at', { ascending: true }),
+  ]);
+
+  const c = (campaignRes.data ?? {}) as Record<string, number>;
+  const sentCount      = c.sent_count       ?? 0;
+  const totalOpens     = c.open_count        ?? 0;
+  const uniqueOpens    = c.unique_open_count ?? 0;
+  const clickCount     = c.click_count       ?? 0;
+
+  // Group opens by hour for the timeline chart.
+  const hourMap: Record<string, number> = {};
+  for (const ev of (eventsRes.data ?? []) as { event_type: string; occurred_at: string }[]) {
+    if (ev.event_type !== 'open') continue;
+    const hour = ev.occurred_at.slice(0, 13) + ':00'; // "2026-05-26T14:00"
+    hourMap[hour] = (hourMap[hour] ?? 0) + 1;
+  }
+  const opensByHour = Object.entries(hourMap)
+    .map(([hour, count]) => ({ hour, count }))
+    .sort((a, b) => a.hour.localeCompare(b.hour));
+
+  const base = sentCount > 0 ? sentCount : (uniqueOpens > 0 ? uniqueOpens : 1);
+  return {
+    totalOpens,
+    uniqueOpens,
+    clickCount,
+    openRate:  Math.round((uniqueOpens / base) * 1000) / 10,
+    clickRate: Math.round((clickCount  / base) * 1000) / 10,
+    opensByHour,
+  };
+}
+
+// ── Email recipient log ───────────────────────────────────────────────────────
+
+export async function recordEmailRecipients(
+  campaignId: string,
+  recipients: { email: string; fullName: string }[],
+): Promise<void> {
+  if (recipients.length === 0) return;
+  const rows = recipients.map(r => ({
+    campaign_id: campaignId,
+    email: r.email.toLowerCase().trim(),
+    full_name: r.fullName,
+  }));
+  // Upsert: if the email was already logged for this campaign, update the timestamp.
+  await client()
+    .schema('excel_to_ai')
+    .from('email_campaign_recipients')
+    .upsert(rows, { onConflict: 'campaign_id,email' });
+}
+
+// Returns registrations in the active session that have NOT yet been sent this campaign.
+export async function getUnemailedRegistrations(
+  campaignId: string,
+  audience: 'verified' | 'unverified' | 'all',
+  sessionId?: string | null,
+): Promise<EmailRecipient[]> {
+  const supabase = client();
+
+  // 1. Fetch emails already logged for this campaign.
+  const { data: sent } = await supabase
+    .schema('excel_to_ai')
+    .from('email_campaign_recipients')
+    .select('email')
+    .eq('campaign_id', campaignId);
+
+  const sentEmails = new Set((sent ?? []).map(r => (r.email as string).toLowerCase()));
+
+  // 2. Fetch all matching registrations.
+  const all = await getEmailRecipients(audience, sessionId);
+
+  // 3. Filter out already-sent.
+  return all.filter(r => !sentEmails.has(r.email.toLowerCase()));
+}
+
+// Returns the count of registrations that haven't received a specific campaign.
+export async function getUnemailedCount(
+  campaignId: string,
+  audience: 'verified' | 'unverified' | 'all',
+  sessionId?: string | null,
+): Promise<number> {
+  const list = await getUnemailedRegistrations(campaignId, audience, sessionId);
+  return list.length;
+}
+
+// Returns the most recently created campaign with auto_send_enabled = true
+// whose auto_send_audience matches the given trigger.
+export async function getAutoSendCampaign(
+  trigger: 'verified' | 'unverified',
+): Promise<EmailCampaign | null> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_campaigns')
+    .select('*')
+    .eq('auto_send_enabled', true)
+    .in('auto_send_audience', [trigger, 'all'])
+    .in('status', ['sent', 'partial', 'sending', 'draft'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error || !data) return null;
+  return mapEmailCampaign(data as Record<string, unknown>);
+}
+
+// ── Email schedule queue ──────────────────────────────────────────────────────
+
+function delayMs(value: number, unit: 'minutes' | 'hours' | 'days'): number {
+  if (unit === 'days')    return value * 24 * 60 * 60 * 1000;
+  if (unit === 'hours')   return value * 60 * 60 * 1000;
+  return value * 60 * 1000;
+}
+
+export async function scheduleEmailForRecipient(params: {
+  campaignId: string;
+  recipientEmail: string;
+  recipientName: string;
+  delayValue: number;
+  delayUnit: 'minutes' | 'hours' | 'days';
+}): Promise<void> {
+  const scheduledFor = new Date(Date.now() + delayMs(params.delayValue, params.delayUnit)).toISOString();
+  const { error } = await client()
+    .schema('excel_to_ai')
+    .from('email_schedule_queue')
+    .upsert({
+      campaign_id:     params.campaignId,
+      recipient_email: params.recipientEmail.toLowerCase().trim(),
+      recipient_name:  params.recipientName,
+      scheduled_for:   scheduledFor,
+      status:          'pending',
+    }, { onConflict: 'campaign_id,recipient_email', ignoreDuplicates: true });
+  if (error) throw error;
+}
+
+export async function getDueScheduledEmails(limit = 200): Promise<QueueItem[]> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_schedule_queue')
+    .select('*')
+    .eq('status', 'pending')
+    .lte('scheduled_for', new Date().toISOString())
+    .order('scheduled_for', { ascending: true })
+    .limit(limit);
+  if (error) throw error;
+  return (data ?? []).map(r => ({
+    id:             r.id as string,
+    campaignId:     r.campaign_id as string,
+    recipientEmail: r.recipient_email as string,
+    recipientName:  r.recipient_name as string,
+    scheduledFor:   r.scheduled_for as string,
+    sentAt:         (r.sent_at as string | null) ?? null,
+    status:         r.status as QueueItem['status'],
+    error:          (r.error as string | null) ?? null,
+    createdAt:      r.created_at as string,
+  }));
+}
+
+export async function markQueueItemSent(id: string): Promise<void> {
+  const { error } = await client()
+    .schema('excel_to_ai')
+    .from('email_schedule_queue')
+    .update({ status: 'sent', sent_at: new Date().toISOString() })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function markQueueItemFailed(id: string, errorMsg: string): Promise<void> {
+  const { error } = await client()
+    .schema('excel_to_ai')
+    .from('email_schedule_queue')
+    .update({ status: 'failed', error: errorMsg })
+    .eq('id', id);
+  if (error) throw error;
+}
+
+export async function getQueueSummary(campaignId: string): Promise<QueueSummary> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_schedule_queue')
+    .select('status, scheduled_for')
+    .eq('campaign_id', campaignId);
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const pendingRows = rows.filter(r => r.status === 'pending');
+  const summary: QueueSummary = {
+    pendingCount: pendingRows.length,
+    sentCount:    rows.filter(r => r.status === 'sent').length,
+    failedCount:  rows.filter(r => r.status === 'failed').length,
+    nextScheduledFor: pendingRows.length > 0
+      ? (pendingRows.sort((a, b) => a.scheduled_for.localeCompare(b.scheduled_for))[0].scheduled_for as string)
+      : null,
+  };
+  return summary;
+}
+
+
+// ── Email branding settings ───────────────────────────────────────────────────
+
+export interface EmailSettings {
+  logoUrl: string | null;
+  logoAlign: 'left' | 'center' | 'right';
+  logoHeight: number;
+  headerColor: string;
+}
+
+export async function getEmailSettings(): Promise<EmailSettings> {
+  const { data, error } = await client()
+    .schema('excel_to_ai')
+    .from('email_settings')
+    .select('logo_url, logo_align, logo_height, header_color')
+    .eq('singleton', true)
+    .single();
+  if (error) {
+    return { logoUrl: null, logoAlign: 'left', logoHeight: 36, headerColor: '#003368' };
+  }
+  return {
+    logoUrl:     (data.logo_url as string | null) ?? null,
+    logoAlign:   ((data.logo_align as string) ?? 'left') as 'left' | 'center' | 'right',
+    logoHeight:  (data.logo_height as number) ?? 36,
+    headerColor: (data.header_color as string) || '#003368',
+  };
+}
+
+export async function updateEmailSettings(settings: Partial<EmailSettings>): Promise<void> {
+  const row: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  if (settings.logoUrl      !== undefined) row.logo_url     = settings.logoUrl;
+  if (settings.logoAlign    !== undefined) row.logo_align   = settings.logoAlign;
+  if (settings.logoHeight   !== undefined) row.logo_height  = settings.logoHeight;
+  if (settings.headerColor  !== undefined) row.header_color = settings.headerColor;
+  const { error } = await client()
+    .schema('excel_to_ai')
+    .from('email_settings')
+    .update(row)
+    .eq('singleton', true);
+  if (error) throw error;
+}

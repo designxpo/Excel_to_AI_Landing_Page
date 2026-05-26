@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import crypto from 'crypto';
-import { addRegistration, markRegistrationVerified } from '@/lib/db';
+import { addRegistration, markRegistrationVerified, getAutoSendCampaign, scheduleEmailForRecipient } from '@/lib/db';
 // Meta CAPI is now sent by Stape (server-side GTM). We only generate the
 // event_id here and return it to the client so the browser pixel and Stape
 // use the same id for dedup.
@@ -78,7 +78,19 @@ export async function POST(req: NextRequest) {
       await addRegistration(verifiedPayload);
     }
 
-    // 5. Generate / echo back the event_id so the browser pixel and Stape
+    // 5. Queue in the scheduled-send system (delivery time = campaign delay).
+    getAutoSendCampaign('verified').then(async campaign => {
+      if (!campaign) return;
+      await scheduleEmailForRecipient({
+        campaignId:     campaign.id,
+        recipientEmail: email,
+        recipientName:  fullName,
+        delayValue:     campaign.delayValue,
+        delayUnit:      campaign.delayUnit,
+      });
+    }).catch(err => console.error('[auto-send] verified queue failed:', err));
+
+    // 6. Generate / echo back the event_id so the browser pixel and Stape
     // use the same id for CompleteRegistration deduplication.
     const completeEventId: string = (typeof incomingEventId === 'string' && incomingEventId)
       ? incomingEventId

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown, Settings, Video, Star, ListOrdered, HelpCircle, Layers, Users, UserCog } from "lucide-react";
+import { Loader2, LogOut, UploadCloud, Plus, Trash2, ArrowUp, ArrowDown, Settings, Video, Star, ListOrdered, HelpCircle, Layers, Users, UserCog, Mail } from "lucide-react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import TeamTab from "./TeamTab";
 import SessionsTab from "./SessionsTab";
+import EmailTab from "./EmailTab";
 
 type FaqItem = { id: string; q: string; a: string; order: number };
 type FeatureItem = { id: string; icon: string | null; title: string; description: string; accent: string | null; sortOrder: number };
@@ -71,7 +72,7 @@ type WebinarConfig = {
   genericBrochureUrl: string | null; genericBrochureCta: string | null;
 };
 
-type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs' | 'team' | 'sessions';
+type AdminTab = 'settings' | 'webinar' | 'features' | 'agenda' | 'registrations' | 'faqs' | 'team' | 'sessions' | 'email';
 
 export default function AdminPortal() {
   const router = useRouter();
@@ -560,6 +561,7 @@ export default function AdminPortal() {
     { key: 'faqs',          label: 'FAQs',           icon: <HelpCircle    className="w-4 h-4" /> },
     { key: 'sessions',      label: 'Sessions',       icon: <Layers        className="w-4 h-4" /> },
     { key: 'registrations', label: 'Registrations',  icon: <Users         className="w-4 h-4" /> },
+    { key: 'email',         label: 'Emails',         icon: <Mail          className="w-4 h-4" /> },
     { key: 'team',          label: 'Team',           icon: <UserCog       className="w-4 h-4" /> },
   ];
 
@@ -1477,6 +1479,9 @@ export default function AdminPortal() {
 
           {/* Sessions Tab */}
           {activeTab === "sessions" && <SessionsTab />}
+
+          {/* Email Tab */}
+          {activeTab === "email" && <EmailTab />}
 
         </div>
       </main>

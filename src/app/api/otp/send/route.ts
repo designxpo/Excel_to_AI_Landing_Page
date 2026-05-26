@@ -4,7 +4,7 @@ import { registerWebinarParticipant, type ZoomRegistrationResult } from '@/lib/z
 // Meta CAPI is now sent by Stape (server-side GTM). We only generate the
 // event_id here and return it to the client so the browser pixel and Stape
 // use the same id for dedup.
-import { findRegistrationByEmailOrPhone, getWebinarConfig, addUnverifiedRegistration } from '@/lib/db';
+import { findRegistrationByEmailOrPhone, getWebinarConfig, addUnverifiedRegistration, getAutoSendCampaign, scheduleEmailForRecipient } from '@/lib/db';
 import { sendWhatsAppOtp } from '@/lib/whatsapp';
 
 function requireEnv(name: string): string {
@@ -183,6 +183,18 @@ export async function POST(req: NextRequest) {
         sessionId: config.activeSessionId,
       });
       registrationId = created.id;
+
+      // Queue in the scheduled-send system (delivery time = campaign delay).
+      getAutoSendCampaign('unverified').then(async campaign => {
+        if (!campaign) return;
+        await scheduleEmailForRecipient({
+          campaignId:     campaign.id,
+          recipientEmail: email,
+          recipientName:  fullName,
+          delayValue:     campaign.delayValue,
+          delayUnit:      campaign.delayUnit,
+        });
+      }).catch(err => console.error('[auto-send] unverified queue failed:', err));
     } catch (regErr) {
       console.error('[Registrations] Failed to insert unverified row:', regErr);
       // Non-fatal — the OTP flow continues; verify will fall back to insert.
