@@ -83,20 +83,32 @@ export function buildEmailHtml(params: {
     : '';
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="en" style="color-scheme:light">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta name="color-scheme" content="light" />
+  <meta name="supported-color-schemes" content="light" />
   <title>${subject}</title>
+  <style>
+    :root { color-scheme: light only; }
+    /* Force light mode in Apple Mail / Outlook Mac */
+    @media (prefers-color-scheme: dark) {
+      body, .email-outer { background-color: #f1f5f9 !important; }
+      .email-card { background-color: #ffffff !important; }
+      .email-body-cell { color: #1e293b !important; background-color: #ffffff !important; }
+      .email-footer-cell { background-color: #ffffff !important; }
+    }
+  </style>
 </head>
-<body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+<body class="email-outer" style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;padding:32px 16px">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
+      <table class="email-card" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" data-ogsc="#ffffff">
 
         <!-- Brand header -->
         <tr>
-          <td style="background:${settings.headerColor};padding:16px 40px">
+          <td style="background:${settings.headerColor};padding:16px 40px" data-ogsc="${settings.headerColor}">
             ${buildLogoBlock(settings)}
           </td>
         </tr>
@@ -106,14 +118,14 @@ export function buildEmailHtml(params: {
 
         <!-- Body -->
         <tr>
-          <td style="padding:36px 40px 24px;color:#1e293b;font-size:15px">
+          <td class="email-body-cell" style="padding:36px 40px 24px;color:#1e293b;font-size:15px;background:#ffffff" data-ogsc="#ffffff">
             ${contentHtml}
           </td>
         </tr>
 
         <!-- Footer -->
         <tr>
-          <td style="padding:20px 40px 32px;border-top:1px solid #e2e8f0">
+          <td class="email-footer-cell" style="padding:20px 40px 32px;border-top:1px solid #e2e8f0;background:#ffffff" data-ogsc="#ffffff">
             <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6">
               You're receiving this because you registered for an Analytix Labs masterclass.
               <br />© ${new Date().getFullYear()} AnalytixLabs India Pvt. Ltd.
@@ -226,17 +238,19 @@ export async function sendTestEmail(params: {
     : '';
 
   const html = `<!DOCTYPE html>
-<html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+<html lang="en" style="color-scheme:light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${subject}</title>
+<style>:root{color-scheme:light only}@media(prefers-color-scheme:dark){body{background-color:#f1f5f9!important}.email-card{background-color:#ffffff!important}.email-body-cell{color:#1e293b!important;background-color:#ffffff!important}.email-footer-cell{background-color:#ffffff!important}}</style>
+</head>
 <body style="margin:0;padding:0;background:#f1f5f9;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
   <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f1f5f9;padding:32px 16px">
     <tr><td align="center">
-      <table width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-        <tr><td style="background:${emailSettings.headerColor};padding:16px 40px">
+      <table class="email-card" width="600" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" data-ogsc="#ffffff">
+        <tr><td style="background:${emailSettings.headerColor};padding:16px 40px" data-ogsc="${emailSettings.headerColor}">
           ${buildLogoBlock(emailSettings, true)}
         </td></tr>
         ${banner ? `<tr><td style="padding:0">${banner}</td></tr>` : ''}
-        <tr><td style="padding:36px 40px 24px;color:#1e293b;font-size:15px">${contentHtml}</td></tr>
-        <tr><td style="padding:20px 40px 32px;border-top:1px solid #e2e8f0">
+        <tr><td class="email-body-cell" style="padding:36px 40px 24px;color:#1e293b;font-size:15px;background:#ffffff" data-ogsc="#ffffff">${contentHtml}</td></tr>
+        <tr><td class="email-footer-cell" style="padding:20px 40px 32px;border-top:1px solid #e2e8f0;background:#ffffff" data-ogsc="#ffffff">
           <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6">This is a test preview — tracking is disabled for test sends.</p>
         </td></tr>
       </table>

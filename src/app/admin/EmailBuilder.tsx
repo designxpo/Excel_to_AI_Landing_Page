@@ -4,12 +4,12 @@ import { useState, useCallback, useEffect, useRef } from "react";
 import {
   Plus, Trash2, ArrowUp, ArrowDown, Eye, Code, Type,
   AlignLeft, AlignCenter, AlignRight, MousePointer,
-  Minus, Info, ChevronDown, LayoutTemplate,
+  Minus, Info, ChevronDown, LayoutTemplate, List,
 } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
-type BlockType = "heading" | "subheading" | "text" | "image" | "button" | "divider" | "spacer" | "highlight";
+type BlockType = "heading" | "subheading" | "text" | "list" | "image" | "button" | "divider" | "spacer" | "highlight";
 type Align = "left" | "center" | "right";
 type EditorMode = "visual" | "html" | "preview";
 
@@ -145,6 +145,16 @@ export function blocksToHtml(blocks: EmailBlock[]): string {
         </td></tr>`;
       }
 
+      case "list": {
+        const items = b.value.split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean);
+        if (!items.length) return "";
+        return `<tr><td style="padding:0 0 16px;text-align:${b.align ?? "left"}">
+          <ul style="margin:0;padding-left:24px;font-size:15px;line-height:1.7;color:#334155;font-family:-apple-system,sans-serif">
+            ${items.map(item => `<li style="margin-bottom:6px">${inlineToHtml(escHtml(item))}</li>`).join("\n            ")}
+          </ul>
+        </td></tr>`;
+      }
+
       default:
         return "";
     }
@@ -164,9 +174,225 @@ export function blocksToText(blocks: EmailBlock[]): string {
       case "divider":    return "---";
       case "spacer":     return "";
       case "highlight":  return b.value;
+      case "list":       return b.value.split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean).map(l => `• ${l}`).join("\n");
       default:           return "";
     }
   }).filter(Boolean).join("\n\n");
+}
+
+// ── HTML → blocks parser ──────────────────────────────────────────────────────
+// Reverses blocksToHtml so Apply can update the visual editor.
+
+function elInnerText(el: Element): string {
+  return (el.innerHTML ?? "")
+    .replace(/<strong>(.*?)<\/strong>/gi, "**$1**")
+    .replace(/<em>(.*?)<\/em>/gi, "*$1*")
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">").replace(/&quot;/g, '"')
+    .trim();
+}
+
+function parseAlign(style: string): Align {
+  const m = style.match(/text-align:\s*(left|center|right)/);
+  return (m?.[1] ?? "left") as Align;
+}
+
+// child(el, tag) — gets the first DIRECT child element with the given tag name.
+// Using .children array avoids all :scope quirks across browsers.
+function child(el: HTMLElement, tag: string): HTMLElement | null {
+  const upper = tag.toUpperCase();
+  for (let k = 0; k < el.children.length; k++) {
+    if (el.children[k].tagName === upper) return el.children[k] as HTMLElement;
+  }
+  return null;
+}
+
+function parseBlocksFromElements(els: HTMLElement[]): EmailBlock[] {
+  const blocks: EmailBlock[] = [];
+  let i = 0;
+
+  while (i < els.length) {
+    const el  = els[i];
+    const tag = el.tagName;
+    const style = el.getAttribute("style") ?? "";
+    const align = parseAlign(style);
+
+    if (tag === "H1") {
+      blocks.push({ id: uid(), type: "heading", value: elInnerText(el), align });
+      i++;
+    } else if (tag === "H2" || tag === "H3") {
+      blocks.push({ id: uid(), type: "subheading", value: elInnerText(el), align });
+      i++;
+    } else if (tag === "HR") {
+      blocks.push({ id: uid(), type: "divider", value: "", align: "left" });
+      i++;
+    } else if (tag === "IMG") {
+      blocks.push({ id: uid(), type: "image", value: el.getAttribute("src") ?? "", align });
+      i++;
+    } else if (tag === "A" && el.getAttribute("href")) {
+      const bgMatch = style.match(/background(?:-color)?:\s*([^;]+)/);
+      blocks.push({
+        id: uid(), type: "button",
+        value: el.textContent?.trim() ?? "",
+        align: align || "center",
+        href: el.getAttribute("href") ?? "",
+        buttonColor: bgMatch ? bgMatch[1].trim() : "#003368",
+      });
+      i++;
+    } else if (tag === "DIV") {
+      const bgMatch = style.match(/background(?:-color)?:\s*([^;]+)/);
+      if (bgMatch) {
+        // Coloured div → highlight / info box
+        const lines = Array.from(el.querySelectorAll("p"))
+          .map(p => p.textContent?.trim() ?? "").filter(Boolean);
+        const text = lines.length > 0 ? lines.join("\n") : elInnerText(el);
+        blocks.push({ id: uid(), type: "highlight", value: text, align: "left", highlightColor: bgMatch[1].trim() });
+        i++;
+      } else {
+        // Plain wrapper div — recurse into its children
+        const inner = Array.from(el.children) as HTMLElement[];
+        if (inner.length > 0) {
+          blocks.push(...parseBlocksFromElements(inner));
+        } else {
+          const t = el.textContent?.trim() ?? "";
+          if (t) blocks.push({ id: uid(), type: "text", value: t, align });
+        }
+        i++;
+      }
+    } else if (tag === "P") {
+      // Collect consecutive <p> siblings into one text block
+      const paras: string[] = [];
+      while (i < els.length && els[i].tagName === "P") {
+        paras.push(elInnerText(els[i]));
+        i++;
+      }
+      if (paras.length > 0) blocks.push({ id: uid(), type: "text", value: paras.join("\n\n"), align });
+    } else if (tag === "TABLE") {
+      // Nested table — parse it as table format
+      const parsed = parseTableFormat(el);
+      if (parsed) blocks.push(...parsed);
+      i++;
+    } else {
+      // Unknown element — treat as text if it has content
+      const t = el.textContent?.trim() ?? "";
+      if (t) blocks.push({ id: uid(), type: "text", value: t, align });
+      i++;
+    }
+  }
+
+  return blocks;
+}
+
+function parseTableFormat(table: HTMLElement): EmailBlock[] | null {
+  const tbody = child(table, "tbody") ?? table;
+  const rows: HTMLElement[] = [];
+  for (let k = 0; k < tbody.children.length; k++) {
+    if (tbody.children[k].tagName === "TR") rows.push(tbody.children[k] as HTMLElement);
+  }
+  if (rows.length === 0) return null;
+
+  const blocks: EmailBlock[] = [];
+  let i = 0;
+
+  while (i < rows.length) {
+    const td = child(rows[i], "td");
+    if (!td) { i++; continue; }
+
+    const tdStyle = td.getAttribute("style") ?? "";
+    const align   = parseAlign(tdStyle);
+    const h1       = child(td, "h1");
+    const h2       = child(td, "h2");
+    const anchor   = child(td, "a");
+    const hr       = child(td, "hr");
+    const blockDiv = child(td, "div");
+    const img      = child(td, "img");
+    const p        = child(td, "p");
+
+    if (h1) {
+      blocks.push({ id: uid(), type: "heading", value: elInnerText(h1), align });
+      i++;
+    } else if (h2) {
+      blocks.push({ id: uid(), type: "subheading", value: elInnerText(h2), align });
+      i++;
+    } else if (anchor && anchor.getAttribute("href")) {
+      const aStyle  = anchor.getAttribute("style") ?? "";
+      const bgMatch = aStyle.match(/background:\s*([^;]+)/);
+      blocks.push({
+        id: uid(), type: "button",
+        value: anchor.textContent?.trim() ?? "",
+        align,
+        href: anchor.getAttribute("href") ?? "",
+        buttonColor: bgMatch ? bgMatch[1].trim() : "#003368",
+      });
+      i++;
+    } else if (hr) {
+      blocks.push({ id: uid(), type: "divider", value: "", align: "left" });
+      i++;
+    } else if (tdStyle.replace(/\s/g, "").includes("height:24px")) {
+      blocks.push({ id: uid(), type: "spacer", value: "", align: "left" });
+      i++;
+    } else if (blockDiv) {
+      const divStyle = blockDiv.getAttribute("style") ?? "";
+      const bgMatch  = divStyle.match(/background:\s*([^;]+)/);
+      const lines    = Array.from(blockDiv.querySelectorAll("p"))
+        .map(el => el.textContent?.trim() ?? "").filter(Boolean);
+      blocks.push({
+        id: uid(), type: "highlight",
+        value: lines.join("\n"),
+        align: "left",
+        highlightColor: bgMatch ? bgMatch[1].trim() : "#e0f2fe",
+      });
+      i++;
+    } else if (img && !anchor) {
+      blocks.push({ id: uid(), type: "image", value: img.getAttribute("src") ?? "", align });
+      i++;
+    } else if (p) {
+      const paras: string[] = [];
+      while (i < rows.length) {
+        const innerTd = child(rows[i], "td");
+        if (!innerTd) break;
+        const hasSpecial = child(innerTd, "h1") || child(innerTd, "h2") ||
+                           child(innerTd, "a")  || child(innerTd, "hr") ||
+                           child(innerTd, "div") || child(innerTd, "img");
+        const innerP = child(innerTd, "p");
+        if (hasSpecial || !innerP) break;
+        paras.push(elInnerText(innerP));
+        i++;
+      }
+      if (paras.length > 0) blocks.push({ id: uid(), type: "text", value: paras.join("\n\n"), align });
+    } else {
+      i++;
+    }
+  }
+
+  return blocks.length > 0 ? blocks : null;
+}
+
+export function htmlToBlocks(html: string): EmailBlock[] | null {
+  if (typeof document === "undefined") return null;
+  try {
+    const wrap = document.createElement("div");
+    wrap.innerHTML = html;
+
+    // Path 1: table-based HTML (generated by blocksToHtml)
+    const table = wrap.querySelector("table") as HTMLElement | null;
+    if (table) return parseTableFormat(table);
+
+    // Path 2: free-form HTML (<div>, <h1>, <p>, etc.)
+    // Use top-level children of wrap. If there's a single wrapper div, go one level deeper.
+    let topEls = Array.from(wrap.children) as HTMLElement[];
+    if (topEls.length === 1 && topEls[0].tagName === "DIV") {
+      topEls = Array.from(topEls[0].children) as HTMLElement[];
+    }
+    if (topEls.length === 0) return null;
+
+    const blocks = parseBlocksFromElements(topEls);
+    return blocks.length > 0 ? blocks : null;
+  } catch (err) {
+    console.error("[htmlToBlocks] parse error:", err);
+    return null;
+  }
 }
 
 // ── Block meta ────────────────────────────────────────────────────────────────
@@ -175,6 +401,7 @@ const BLOCK_DEFS: { type: BlockType; label: string; icon: React.ReactNode; defau
   { type: "heading",    label: "Heading",    icon: <Type className="w-4 h-4" />,           default: { value: "Your heading", align: "center" } },
   { type: "subheading", label: "Sub-heading",icon: <Type className="w-3.5 h-3.5" />,       default: { value: "Sub-heading", align: "left" } },
   { type: "text",       label: "Text",       icon: <AlignLeft className="w-4 h-4" />,      default: { value: "Write your message here...", align: "left" } },
+  { type: "list",       label: "Bullet list",icon: <List className="w-4 h-4" />,           default: { value: "First point\nSecond point\nThird point", align: "left" } },
   { type: "highlight",  label: "Info box",   icon: <Info className="w-4 h-4" />,           default: { value: "Key detail here", align: "left", highlightColor: "#e0f2fe" } },
   { type: "button",     label: "Button",     icon: <MousePointer className="w-4 h-4" />,   default: { value: "Click here", align: "center", href: "https://", buttonColor: "#003368" } },
   { type: "image",      label: "Image URL",  icon: <LayoutTemplate className="w-4 h-4" />, default: { value: "", align: "center" } },
@@ -188,6 +415,7 @@ const BUTTON_COLORS = [
   { label: "Dark",        value: "#1e293b" },
   { label: "Red",         value: "#dc2626" },
   { label: "Purple",      value: "#7c3aed" },
+  { label: "Orange",      value: "#ea580c" },
 ];
 
 const HIGHLIGHT_COLORS = [
@@ -195,8 +423,70 @@ const HIGHLIGHT_COLORS = [
   { label: "Yellow",     value: "#fef9c3" },
   { label: "Green",      value: "#f0fdf4" },
   { label: "Purple",     value: "#f5f3ff" },
+  { label: "Peach",      value: "#fff7ed" },
   { label: "Slate",      value: "#f8fafc" },
 ];
+
+function isHex(v: string) { return /^#[0-9a-fA-F]{6}$/.test(v); }
+
+function ColorInput({
+  label,
+  value,
+  presets,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  presets: { label: string; value: string }[];
+  onChange: (c: string) => void;
+}) {
+  const [hex, setHex] = useState(value);
+  useEffect(() => { setHex(value); }, [value]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-xs text-slate-500 font-semibold shrink-0">{label}:</span>
+        {presets.map(c => (
+          <button key={c.value} type="button" onClick={() => { setHex(c.value); onChange(c.value); }}
+            title={c.label}
+            style={{ background: c.value }}
+            className={`w-5 h-5 rounded-full border-2 transition-all shrink-0 ${value === c.value ? "border-slate-700 scale-110" : "border-slate-300 hover:border-slate-500"}`} />
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        {/* Native color picker */}
+        <label className="relative w-7 h-7 rounded-md overflow-hidden border border-slate-300 cursor-pointer shrink-0" title="Pick any color">
+          <input
+            type="color"
+            value={isHex(hex) ? hex : "#003368"}
+            onChange={e => { setHex(e.target.value); onChange(e.target.value); }}
+            className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+          />
+          <span className="block w-full h-full rounded-md" style={{ background: isHex(hex) ? hex : value }} />
+        </label>
+        {/* Hex text input */}
+        <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-[#00DF83]/50 focus-within:border-[#00DF83]">
+          <span className="pl-2 pr-0.5 text-xs text-slate-400 font-mono select-none">#</span>
+          <input
+            type="text"
+            maxLength={6}
+            value={hex.replace(/^#/, "")}
+            onChange={e => {
+              const v = "#" + e.target.value.replace(/[^0-9a-fA-F]/g, "");
+              setHex(v);
+              if (isHex(v)) onChange(v);
+            }}
+            onBlur={() => { if (!isHex(hex)) setHex(value); }}
+            placeholder="003368"
+            className="py-1 pr-2 text-xs font-mono w-20 outline-none bg-transparent text-slate-700"
+          />
+        </div>
+        <span className="w-5 h-5 rounded border border-slate-200 shrink-0" style={{ background: isHex(hex) ? hex : value }} />
+      </div>
+    </div>
+  );
+}
 
 function uid() {
   return Math.random().toString(36).slice(2, 10);
@@ -267,20 +557,32 @@ function BlockEditor({
             className={`${inputCls} resize-y font-mono leading-relaxed`} />
         )}
 
+        {block.type === "list" && (
+          <>
+            <textarea rows={5} value={block.value} onChange={e => set({ value: e.target.value })}
+              placeholder={"First point\nSecond point\nThird point"}
+              className={`${inputCls} resize-y leading-relaxed`} />
+            <p className="text-[11px] text-slate-400">One item per line. Supports <strong>**bold**</strong> and <em>*italic*</em>.</p>
+            {/* Live preview of the list */}
+            <ul className="list-disc pl-5 space-y-1">
+              {block.value.split("\n").map(l => l.replace(/^[-•*]\s*/, "").trim()).filter(Boolean).map((item, k) => (
+                <li key={k} className="text-sm text-slate-700">{item}</li>
+              ))}
+            </ul>
+          </>
+        )}
+
         {block.type === "highlight" && (
           <>
             <textarea rows={4} value={block.value} onChange={e => set({ value: e.target.value })}
               placeholder="Key information (one detail per line)…"
               className={`${inputCls} resize-y leading-relaxed`} />
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-slate-500 font-semibold">Background:</span>
-              {HIGHLIGHT_COLORS.map(c => (
-                <button key={c.value} type="button" onClick={() => set({ highlightColor: c.value })}
-                  title={c.label}
-                  style={{ background: c.value }}
-                  className={`w-6 h-6 rounded-full border-2 transition-all ${block.highlightColor === c.value ? "border-[#003368] scale-110" : "border-slate-300 hover:border-slate-400"}`} />
-              ))}
-            </div>
+            <ColorInput
+              label="Background"
+              value={block.highlightColor ?? "#e0f2fe"}
+              presets={HIGHLIGHT_COLORS}
+              onChange={c => set({ highlightColor: c })}
+            />
           </>
         )}
 
@@ -297,15 +599,12 @@ function BlockEditor({
               <input type="url" value={block.href ?? ""} onChange={e => set({ href: e.target.value })}
                 placeholder="https://…" className={inputCls} />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-xs text-slate-500 font-semibold">Color:</span>
-              {BUTTON_COLORS.map(c => (
-                <button key={c.value} type="button" onClick={() => set({ buttonColor: c.value })}
-                  title={c.label}
-                  style={{ background: c.value }}
-                  className={`w-6 h-6 rounded-full border-2 transition-all ${block.buttonColor === c.value ? "border-black scale-110" : "border-transparent hover:border-slate-400"}`} />
-              ))}
-            </div>
+            <ColorInput
+              label="Button color"
+              value={block.buttonColor ?? "#003368"}
+              presets={BUTTON_COLORS}
+              onChange={c => set({ buttonColor: c })}
+            />
           </>
         )}
 
@@ -374,13 +673,15 @@ function PreviewPane({ html, subject, bannerUrl, logoSettings }: {
 }) {
   const settings: LogoSettings = logoSettings ?? { logoUrl: null, logoAlign: "left", logoHeight: 36, headerColor: "#003368" };
   const banner = bannerUrl ? `<img src="${bannerUrl}" alt="" style="display:block;width:100%;border-bottom:1px solid #e2e8f0" />` : "";
-  const full = `<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${subject}</title></head>
+  const full = `<!DOCTYPE html><html lang="en" style="color-scheme:light"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="light"><meta name="supported-color-schemes" content="light"><title>${subject}</title>
+<style>:root{color-scheme:light only}@media(prefers-color-scheme:dark){body{background-color:#f1f5f9!important}.email-card{background-color:#ffffff!important}.email-body-cell{color:#1e293b!important;background-color:#ffffff!important}.email-footer-cell{background-color:#ffffff!important}}</style>
+</head>
 <body style="margin:0;padding:24px 16px;background:#f1f5f9;font-family:-apple-system,sans-serif">
-  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)">
-    <div style="background:${settings.headerColor};padding:16px 40px">${buildPreviewLogoBlock(settings)}</div>
+  <div class="email-card" style="max-width:600px;margin:0 auto;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08)" data-ogsc="#ffffff">
+    <div style="background:${settings.headerColor};padding:16px 40px" data-ogsc="${settings.headerColor}">${buildPreviewLogoBlock(settings)}</div>
     ${banner}
-    <div style="padding:36px 40px 24px">${html}</div>
-    <div style="padding:20px 40px 32px;border-top:1px solid #e2e8f0">
+    <div class="email-body-cell" style="padding:36px 40px 24px;color:#1e293b;background:#ffffff" data-ogsc="#ffffff">${html}</div>
+    <div class="email-footer-cell" style="padding:20px 40px 32px;border-top:1px solid #e2e8f0;background:#ffffff" data-ogsc="#ffffff">
       <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6">You're receiving this because you registered for an Analytix Labs masterclass.<br/>© ${new Date().getFullYear()} AnalytixLabs India Pvt. Ltd.</p>
     </div>
   </div>
@@ -443,30 +744,46 @@ export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChang
     TEMPLATES.reminder10.blocks.map(b => ({ ...b, id: uid() }))
   );
   const [rawHtml, setRawHtml] = useState("");
+  const [appliedHtml, setAppliedHtml] = useState<string | null>(null);
+  const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  // Sync output whenever blocks change (visual mode).
+  // Sync output to parent whenever blocks change.
   const syncOutput = useCallback((bs: EmailBlock[]) => {
-    const html = blocksToHtml(bs);
-    const text = blocksToText(bs);
-    onChange(html, text);
-    return html;
+    onChange(blocksToHtml(bs), blocksToText(bs));
   }, [onChange]);
 
   useEffect(() => {
-    const html = syncOutput(blocks);
-    if (mode === "html") setRawHtml(html);
+    syncOutput(blocks);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [blocks]);
 
-  // When switching to HTML, sync the textarea.
   const handleModeChange = (m: EditorMode) => {
-    if (m === "html") setRawHtml(blocksToHtml(blocks));
+    if (m === "html" && mode === "visual") {
+      // Entering HTML from visual — always freshen rawHtml from current blocks.
+      setRawHtml(blocksToHtml(blocks));
+      setAppliedHtml(null);
+      setApplyMsg(null);
+    }
+    if (m === "visual") {
+      // Returning to visual — clear stale applied HTML so preview tracks live blocks.
+      setAppliedHtml(null);
+      setApplyMsg(null);
+    }
     setMode(m);
   };
 
-  const handleRawHtmlChange = (html: string) => {
-    setRawHtml(html);
-    onChange(html, ""); // plain text fallback empty — that's fine for raw HTML mode
+  const applyHtml = () => {
+    setAppliedHtml(rawHtml);
+    onChange(rawHtml, "");
+    const parsed = htmlToBlocks(rawHtml);
+    if (parsed && parsed.length > 0) {
+      setBlocks(parsed);
+      setApplyMsg({ ok: true, text: `Synced ${parsed.length} block${parsed.length !== 1 ? "s" : ""} to visual editor.` });
+      setMode("visual");
+    } else {
+      console.warn("[applyHtml] parse returned null. rawHtml preview:", rawHtml.slice(0, 300));
+      setApplyMsg({ ok: false, text: "Preview updated — HTML kept as-is (free-form structure)." });
+    }
   };
 
   const updateBlock = useCallback((idx: number, b: EmailBlock) => {
@@ -491,7 +808,9 @@ export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChang
     setBlocks(prev => [...prev, makeBlock(type)]);
   }, []);
 
-  const previewHtml = mode === "html" ? rawHtml : blocksToHtml(blocks);
+  // Preview tab always shows live blocks. appliedHtml is only for the
+  // inline preview rendered inside the HTML editor after clicking Apply.
+  const previewHtml = blocksToHtml(blocks);
 
   const MODE_TABS: { key: EditorMode; label: string; icon: React.ReactNode }[] = [
     { key: "visual",   label: "Visual",   icon: <Type className="w-3.5 h-3.5" /> },
@@ -516,7 +835,7 @@ export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChang
         {mode === "visual" && <TemplatePicker onSelect={setBlocks} />}
         {mode === "html" && (
           <span className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5">
-            Raw HTML mode — changes here won&apos;t update the visual editor.
+            HTML is preserved across tab switches — click Apply to preview.
           </span>
         )}
       </div>
@@ -546,13 +865,39 @@ export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChang
 
       {/* HTML editor */}
       {mode === "html" && (
-        <textarea
-          rows={20}
-          value={rawHtml}
-          onChange={e => handleRawHtmlChange(e.target.value)}
-          spellCheck={false}
-          className="w-full border border-slate-300 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83] leading-relaxed resize-y bg-slate-900 text-green-300"
-        />
+        <div className="space-y-3">
+          <textarea
+            rows={20}
+            value={rawHtml}
+            onChange={e => setRawHtml(e.target.value)}
+            spellCheck={false}
+            className="w-full border border-slate-300 rounded-xl px-4 py-3 text-xs font-mono outline-none focus:ring-2 focus:ring-[#00DF83]/50 focus:border-[#00DF83] leading-relaxed resize-y bg-slate-900 text-green-300"
+          />
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            {applyMsg ? (
+              <span className={`text-xs rounded-lg px-3 py-1.5 border ${applyMsg.ok ? "text-[#00875A] bg-[#00DF83]/10 border-[#00DF83]/30" : "text-amber-700 bg-amber-50 border-amber-200"}`}>
+                {applyMsg.text}
+              </span>
+            ) : (
+              <span className="text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5">
+                Edit HTML above, then click <strong>Apply</strong>.
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={applyHtml}
+              className="flex items-center gap-1.5 bg-[#003368] hover:bg-[#002244] text-white text-xs font-bold px-4 py-2 rounded-lg transition-all shrink-0"
+            >
+              <Eye className="w-3.5 h-3.5" /> Apply &amp; Preview
+            </button>
+          </div>
+          {appliedHtml !== null && (
+            <div className="space-y-1">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Preview</p>
+              <PreviewPane html={appliedHtml} subject={subject} bannerUrl={bannerUrl} logoSettings={logoSettings} />
+            </div>
+          )}
+        </div>
       )}
 
       {/* Preview */}
