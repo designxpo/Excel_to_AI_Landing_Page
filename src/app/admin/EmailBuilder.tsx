@@ -30,6 +30,7 @@ interface Props {
   bannerUrl?: string | null;
   logoSettings?: LogoSettings | null;
   onChange: (html: string, text: string) => void;
+  initialHtml?: string | null;
 }
 
 // ── Templates ─────────────────────────────────────────────────────────────────
@@ -738,11 +739,15 @@ function TemplatePicker({ onSelect }: { onSelect: (blocks: EmailBlock[]) => void
 
 // ── Main component ────────────────────────────────────────────────────────────
 
-export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChange }: Props) {
+export default function EmailBuilder({ subject, bannerUrl, logoSettings, onChange, initialHtml }: Props) {
   const [mode, setMode] = useState<EditorMode>("visual");
-  const [blocks, setBlocks] = useState<EmailBlock[]>(() =>
-    TEMPLATES.reminder10.blocks.map(b => ({ ...b, id: uid() }))
-  );
+  const [blocks, setBlocks] = useState<EmailBlock[]>(() => {
+    if (initialHtml) {
+      const parsed = htmlToBlocks(initialHtml);
+      if (parsed && parsed.length > 0) return parsed;
+    }
+    return TEMPLATES.reminder10.blocks.map(b => ({ ...b, id: uid() }));
+  });
   const [rawHtml, setRawHtml] = useState("");
   const [appliedHtml, setAppliedHtml] = useState<string | null>(null);
   const [applyMsg, setApplyMsg] = useState<{ ok: boolean; text: string } | null>(null);

@@ -1946,7 +1946,10 @@ export async function getEmailRecipients(
   }
 
   if (sessionId) {
-    q = q.eq('session_id', sessionId);
+    // Include rows that belong to this session OR have no session assigned
+    // (registrations created before the session feature was added have session_id = NULL
+    // but conceptually belong to the first/current session).
+    q = q.or(`session_id.eq.${sessionId},session_id.is.null`);
   }
 
   const { data, error } = await q;
@@ -2011,14 +2014,15 @@ export async function createEmailCampaign(params: {
 
 export async function updateEmailCampaign(
   id: string,
-  updates: Partial<Pick<EmailCampaign, 'status' | 'sentCount' | 'failedCount' | 'errorSummary' | 'sentAt'>>,
+  updates: Partial<Pick<EmailCampaign, 'status' | 'sentCount' | 'failedCount' | 'errorSummary' | 'sentAt' | 'totalRecipients'>>,
 ): Promise<void> {
   const row: Record<string, unknown> = {};
-  if (updates.status      !== undefined) row.status        = updates.status;
-  if (updates.sentCount   !== undefined) row.sent_count    = updates.sentCount;
-  if (updates.failedCount !== undefined) row.failed_count  = updates.failedCount;
-  if (updates.errorSummary !== undefined) row.error_summary = updates.errorSummary;
-  if (updates.sentAt      !== undefined) row.sent_at       = updates.sentAt;
+  if (updates.status           !== undefined) row.status            = updates.status;
+  if (updates.sentCount        !== undefined) row.sent_count        = updates.sentCount;
+  if (updates.failedCount      !== undefined) row.failed_count      = updates.failedCount;
+  if (updates.errorSummary     !== undefined) row.error_summary     = updates.errorSummary;
+  if (updates.sentAt           !== undefined) row.sent_at           = updates.sentAt;
+  if (updates.totalRecipients  !== undefined) row.total_recipients  = updates.totalRecipients;
   const { error } = await client()
     .schema('excel_to_ai')
     .from('email_campaigns')

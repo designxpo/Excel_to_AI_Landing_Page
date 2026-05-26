@@ -153,6 +153,7 @@ export async function POST(req: NextRequest) {
       sentCount: result.sentCount,
       failedCount: result.failedCount,
       emailServiceConfigured: true,
+      errors: result.errors,
       message:
         finalStatus === 'sent'    ? `Sent to ${result.sentCount} recipients successfully.` :
         finalStatus === 'partial' ? `Sent to ${result.sentCount}/${recipients.length} recipients. ${result.failedCount} failed.` :

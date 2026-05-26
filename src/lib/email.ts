@@ -196,8 +196,9 @@ export async function sendCampaignEmails(params: {
         failedCount += chunk.length;
         errors.push(`Batch ${i / BATCH_SIZE + 1}: ${error.message ?? JSON.stringify(error)}`);
       } else {
-        const results = (data as unknown as { id?: string }[] | null) ?? [];
-        const ok = results.filter(r => r?.id).length;
+        // Resend SDK v6+ returns { data: [{id}] } nested inside the outer data field.
+        const rows = (data as unknown as { data?: { id?: string }[] } | null)?.data ?? [];
+        const ok = rows.filter(r => r?.id).length;
         sentCount += ok;
         failedCount += chunk.length - ok;
       }

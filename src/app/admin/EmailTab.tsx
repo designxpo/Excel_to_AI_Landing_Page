@@ -5,7 +5,7 @@ import {
   Loader2, Send, Users, CheckCircle, Clock, AlertCircle, Mail,
   UploadCloud, X, ImageIcon, BarChart2, ChevronDown, ChevronUp,
   Zap, RefreshCw, AlignLeft, AlignCenter, AlignRight, FlaskConical,
-  Search,
+  Search, RotateCcw, Copy,
 } from "lucide-react";
 import Image from "next/image";
 import EmailBuilder from "./EmailBuilder";
@@ -16,6 +16,7 @@ interface Campaign {
   id: string;
   subject: string;
   bodyText: string;
+  bodyHtml: string | null;
   bannerUrl: string | null;
   audience: Audience;
   status: "draft" | "sending" | "sent" | "partial" | "failed";
@@ -450,6 +451,16 @@ function CampaignStatsPanel({ campaign }: { campaign: Campaign }) {
         </div>
       )}
 
+      {(campaign.status === "failed" || campaign.status === "partial") && campaign.errorSummary && (
+        <div className="flex items-start gap-2 text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+          <AlertCircle className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+          <div>
+            <span className="font-bold">Send error: </span>
+            {campaign.errorSummary}
+          </div>
+        </div>
+      )}
+
       {/* Metric cards */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
         {METRICS.map(m => (
@@ -680,6 +691,9 @@ export default function EmailTab() {
   const [subject, setSubject]   = useState("");
   const [bodyHtml, setBodyHtml] = useState("");
   const [bodyText, setBodyText] = useState("");
+  const [builderKey, setBuilderKey]     = useState(0);
+  const [builderInitHtml, setBuilderInitHtml] = useState<string | null>(null);
+  const composerRef = useRef<HTMLDivElement>(null);
 
   const [bannerUrl, setBannerUrl]               = useState<string>("");
   const [isUploadingBanner, setIsUploadingBanner] = useState(false);
@@ -712,6 +726,9 @@ export default function EmailTab() {
   const [expandedId, setExpandedId]             = useState<string | null>(null);
   const [sendingNewId, setSendingNewId]         = useState<string | null>(null);
   const [sendNewResults, setSendNewResults]     = useState<Record<string, { kind: "ok" | "err"; text: string }>>({});
+
+  const [retryingId, setRetryingId]             = useState<string | null>(null);
+  const [retryResults, setRetryResults]         = useState<Record<string, { kind: "ok" | "err"; text: string }>>({});
 
   // ── Upload ──────────────────────────────────────────────────────────────
   const uploadFile = useCallback(async (file: File) => {
@@ -792,7 +809,11 @@ export default function EmailTab() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
-      setSaveResult({ kind: data.emailServiceConfigured ? "ok" : "warn", text: data.message });
+      const kind = !data.emailServiceConfigured ? "warn"
+                 : data.success                  ? "ok"
+                 :                                 "err";
+      const errorDetail = data.errors?.length ? ` Error: ${data.errors[0]}` : "";
+      setSaveResult({ kind, text: data.message + errorDetail });
       setSubject(""); setBodyText(""); setBodyHtml(""); setBannerUrl("");
       loadCampaigns();
     } catch (err) {
@@ -838,6 +859,32 @@ export default function EmailTab() {
     } finally { setSendingNewId(null); }
   };
 
+  const handleRetry = async (campaignId: string) => {
+    setRetryingId(campaignId);
+    setRetryResults(prev => { const n = { ...prev }; delete n[campaignId]; return n; });
+    try {
+      const res = await fetch(`/api/admin/email/campaigns/${campaignId}/retry`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+      const kind = data.success ? "ok" : "err";
+      const errorDetail = data.errors?.length ? ` — ${data.errors[0]}` : "";
+      setRetryResults(prev => ({ ...prev, [campaignId]: { kind, text: data.message + errorDetail } }));
+      loadCampaigns();
+    } catch (err) {
+      setRetryResults(prev => ({ ...prev, [campaignId]: { kind: "err", text: err instanceof Error ? err.message : "Retry failed" } }));
+    } finally { setRetryingId(null); }
+  };
+
+  const handleLoadCampaign = (c: Campaign) => {
+    setSubject(c.subject);
+    setAudience(c.audience);
+    setBannerUrl(c.bannerUrl ?? "");
+    setBuilderInitHtml(c.bodyHtml || c.bodyText || null);
+    setBuilderKey(k => k + 1); // remount EmailBuilder with new initial content
+    setSaveResult(null);
+    composerRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
+
   // ── Render ──────────────────────────────────────────────────────────────
   return (
     <div className="max-w-5xl space-y-8">
@@ -847,7 +894,7 @@ export default function EmailTab() {
         <p className="text-sm text-slate-500 mt-1">Compose and save campaigns. Open/click stats populate automatically once emails are sent.</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_288px] gap-6 items-start">
+      <div ref={composerRef} className="grid grid-cols-1 lg:grid-cols-[1fr_288px] gap-6 items-start">
 
         {/* ── Composer ─────────────────────────────────────────────────── */}
         <div className="space-y-5">
@@ -988,10 +1035,12 @@ export default function EmailTab() {
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-slate-500 mb-2">Email body</label>
             <EmailBuilder
+              key={builderKey}
               subject={subject}
               bannerUrl={bannerUrl}
               logoSettings={emailSettings}
               onChange={(html, text) => { setBodyHtml(html); setBodyText(text); }}
+              initialHtml={builderInitHtml}
             />
           </div>
 
@@ -1067,6 +1116,9 @@ export default function EmailTab() {
                 <div className="text-xs text-slate-500 mt-0.5">
                   unique addresses{preview.sessionCode && <span className="ml-1 font-semibold text-[#003368]">· {preview.sessionCode}</span>}
                 </div>
+                <p className="text-[10px] text-slate-400 mt-1 leading-relaxed">
+                  Active session · includes early registrations with no session assigned.
+                </p>
                 {preview.samples.length > 0 && (
                   <div className="mt-4 space-y-2">
                     <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sample</div>
@@ -1201,6 +1253,30 @@ export default function EmailTab() {
                       </button>
                     )}
 
+                    {/* Retry — for failed / partial campaigns */}
+                    {(c.status === "failed" || c.status === "partial") && (
+                      <button
+                        onClick={() => handleRetry(c.id)}
+                        disabled={retryingId === c.id}
+                        className="flex items-center gap-1 text-xs font-semibold text-red-700 hover:text-red-800 bg-red-50 hover:bg-red-100 border border-red-200 px-2 py-1 rounded-md transition-colors shrink-0 disabled:opacity-60"
+                        title="Re-send to all recipients in the original audience"
+                      >
+                        {retryingId === c.id
+                          ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          : <RotateCcw className="w-3.5 h-3.5" />}
+                        Retry
+                      </button>
+                    )}
+
+                    {/* Load into composer */}
+                    <button
+                      onClick={() => handleLoadCampaign(c)}
+                      className="flex items-center gap-1 text-xs font-semibold text-slate-500 hover:text-[#003368] bg-slate-50 hover:bg-slate-100 border border-slate-200 px-2 py-1 rounded-md transition-colors shrink-0"
+                      title="Load this campaign into the composer to edit and resend"
+                    >
+                      <Copy className="w-3.5 h-3.5" /> Load
+                    </button>
+
                     {/* Stats toggle */}
                     <button
                       onClick={() => setExpandedId(isExpanded ? null : c.id)}
@@ -1217,6 +1293,14 @@ export default function EmailTab() {
                     <div className={`px-5 py-2 text-xs font-semibold flex items-center gap-1.5 border-t border-slate-200 ${sendNewResults[c.id].kind === "ok" ? "bg-[#00DF83]/8 text-[#00875A]" : "bg-red-50 text-red-700"}`}>
                       {sendNewResults[c.id].kind === "ok" ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
                       {sendNewResults[c.id].text}
+                    </div>
+                  )}
+
+                  {/* Retry result */}
+                  {retryResults[c.id] && (
+                    <div className={`px-5 py-2 text-xs font-semibold flex items-center gap-1.5 border-t border-slate-200 ${retryResults[c.id].kind === "ok" ? "bg-[#00DF83]/8 text-[#00875A]" : "bg-red-50 text-red-700"}`}>
+                      {retryResults[c.id].kind === "ok" ? <CheckCircle className="w-3.5 h-3.5" /> : <AlertCircle className="w-3.5 h-3.5" />}
+                      {retryResults[c.id].text}
                     </div>
                   )}
 
