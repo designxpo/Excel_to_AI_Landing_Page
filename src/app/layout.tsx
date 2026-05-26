@@ -14,6 +14,7 @@ const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || 'https://masterclass.analyt
 const FALLBACK_TITLE = "From Excel to AI — Inside the Data Analyst & Data Scientist Workflow";
 const FALLBACK_DESCRIPTION = "Join our free 90-minute live session to learn how data analysts and scientists use Python and AI in 2026. Beginner-safe.";
 const META_PIXEL_ID = process.env.NEXT_PUBLIC_META_PIXEL_ID;
+const GA_MEASUREMENT_ID = process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
 
 export async function generateMetadata(): Promise<Metadata> {
   // Read editable meta tags from the webinar config; fall back to the values
@@ -70,6 +71,27 @@ export default function RootLayout({
           strategy="beforeInteractive"
           dangerouslySetInnerHTML={{ __html: 'window.dataLayer = window.dataLayer || [];' }}
         />
+        {/* Google Analytics 4 — only render when a measurement ID is configured */}
+        {GA_MEASUREMENT_ID && (
+          <>
+            <Script
+              src={`https://www.googletagmanager.com/gtag/js?id=${GA_MEASUREMENT_ID}`}
+              strategy="afterInteractive"
+            />
+            <Script
+              id="ga4-init"
+              strategy="afterInteractive"
+              dangerouslySetInnerHTML={{
+                __html: `
+                  window.dataLayer = window.dataLayer || [];
+                  function gtag(){dataLayer.push(arguments);}
+                  gtag('js', new Date());
+                  gtag('config', '${GA_MEASUREMENT_ID}', { page_path: window.location.pathname });
+                `,
+              }}
+            />
+          </>
+        )}
         {/* Meta Pixel Code — only render when a real Pixel ID is configured */}
         {META_PIXEL_ID && (
           <Script
