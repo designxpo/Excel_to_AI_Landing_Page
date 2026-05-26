@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import {
   Loader2, Send, Users, CheckCircle, Clock, AlertCircle, Mail,
   UploadCloud, X, ImageIcon, BarChart2, ChevronDown, ChevronUp,
-  Zap, RefreshCw, AlignLeft, AlignCenter, AlignRight,
+  Zap, RefreshCw, AlignLeft, AlignCenter, AlignRight, FlaskConical,
+  Search,
 } from "lucide-react";
 import Image from "next/image";
 import EmailBuilder from "./EmailBuilder";
@@ -53,6 +54,7 @@ interface PreviewResult {
   count: number;
   sessionCode: string | null;
   samples: { email: string; name: string }[];
+  all?: { email: string; name: string }[];
 }
 
 interface EmailSettings {
@@ -524,6 +526,154 @@ function CampaignStatsPanel({ campaign }: { campaign: Campaign }) {
   );
 }
 
+// ── Simulation modal ──────────────────────────────────────────────────────────
+function SimulationModal({
+  audience,
+  onClose,
+}: {
+  audience: Audience;
+  onClose: () => void;
+}) {
+  const [loading, setLoading] = useState(true);
+  const [recipients, setRecipients] = useState<{ email: string; name: string }[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    fetch(`/api/admin/email/preview?audience=${audience}&full=true`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) throw new Error(d.error);
+        setRecipients(d.all ?? []);
+      })
+      .catch(e => setError(String(e)))
+      .finally(() => setLoading(false));
+  }, [audience]);
+
+  const filtered = search.trim()
+    ? recipients.filter(r =>
+        r.email.toLowerCase().includes(search.toLowerCase()) ||
+        r.name.toLowerCase().includes(search.toLowerCase())
+      )
+    : recipients;
+
+  const audienceLabel = audience === "verified" ? "Verified only" : audience === "unverified" ? "Unverified only" : "Everyone";
+  const audienceColor = audience === "verified" ? "text-[#00875A] bg-[#00DF83]/10 border-[#00DF83]/30"
+    : audience === "unverified" ? "text-amber-700 bg-amber-50 border-amber-200"
+    : "text-[#003368] bg-[#003368]/5 border-[#003368]/20";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[80vh] flex flex-col overflow-hidden">
+
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 shrink-0">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="w-5 h-5 text-[#003368]" />
+            <div>
+              <h3 className="text-sm font-bold text-[#003368]">Recipient simulation</h3>
+              <p className="text-[11px] text-slate-400 mt-0.5">Exact list — no email will be sent</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-100 hover:text-slate-600 transition-colors">
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Summary bar */}
+        <div className="px-6 py-3 bg-slate-50 border-b border-slate-200 flex items-center gap-3 shrink-0">
+          <span className={`text-xs font-semibold px-2.5 py-1 rounded-full border ${audienceColor}`}>
+            {audienceLabel}
+          </span>
+          {!loading && !error && (
+            <span className="text-sm font-bold text-[#003368] tabular-nums">
+              {recipients.length.toLocaleString()} <span className="font-normal text-slate-500">recipients would receive this email</span>
+            </span>
+          )}
+        </div>
+
+        {/* Search */}
+        {!loading && !error && recipients.length > 0 && (
+          <div className="px-6 py-3 border-b border-slate-100 shrink-0">
+            <div className="flex items-center gap-2 border border-slate-200 rounded-lg px-3 py-2 focus-within:ring-2 focus-within:ring-[#00DF83]/50 focus-within:border-[#00DF83]">
+              <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                value={search}
+                onChange={e => setSearch(e.target.value)}
+                placeholder="Filter by name or email…"
+                className="flex-1 text-xs outline-none bg-transparent text-slate-700 placeholder:text-slate-400"
+                autoFocus
+              />
+              {search && (
+                <button onClick={() => setSearch("")} className="text-slate-400 hover:text-slate-600">
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+            </div>
+            {search && (
+              <p className="text-[11px] text-slate-400 mt-1.5">
+                {filtered.length} of {recipients.length} match
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto">
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-16 gap-3">
+              <Loader2 className="w-6 h-6 text-[#00DF83] animate-spin" />
+              <p className="text-sm text-slate-500">Loading full recipient list…</p>
+            </div>
+          ) : error ? (
+            <div className="flex items-center gap-2 mx-6 my-6 text-sm text-red-600 bg-red-50 border border-red-200 rounded-xl p-4">
+              <AlertCircle className="w-4 h-4 shrink-0" />
+              {error}
+            </div>
+          ) : filtered.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center gap-2">
+              <Users className="w-8 h-8 text-slate-200" />
+              <p className="text-sm font-semibold text-slate-500">{search ? "No matches" : "No recipients"}</p>
+              <p className="text-xs text-slate-400">
+                {search ? "Try a different search term." : `No ${audience === "all" ? "" : audience + " "}registrations in the active session.`}
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-slate-100">
+              {filtered.map((r, i) => (
+                <div key={r.email} className="flex items-center gap-3 px-6 py-2.5 hover:bg-slate-50 transition-colors">
+                  <span className="text-[11px] text-slate-300 tabular-nums w-8 shrink-0 text-right">{i + 1}</span>
+                  <div className="w-7 h-7 rounded-full bg-[#003368]/8 flex items-center justify-center text-[11px] font-bold text-[#003368] shrink-0">
+                    {r.name?.charAt(0)?.toUpperCase() ?? "?"}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="text-xs font-semibold text-slate-700 truncate">{r.name}</div>
+                    <div className="text-[11px] text-slate-400 truncate">{r.email}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {!loading && !error && recipients.length > 0 && (
+          <div className="px-6 py-3 border-t border-slate-200 bg-slate-50 shrink-0 flex items-center justify-between">
+            <p className="text-[11px] text-slate-400 leading-relaxed">
+              This is a live preview. The actual send list is re-computed at send time.
+            </p>
+            <button onClick={onClose}
+              className="text-xs font-semibold text-slate-600 hover:text-[#003368] px-3 py-1.5 rounded-lg hover:bg-slate-200 transition-colors">
+              Close
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Main component ─────────────────────────────────────────────────────────────
 export default function EmailTab() {
   const [audience, setAudience] = useState<Audience>("verified");
@@ -554,6 +704,8 @@ export default function EmailTab() {
 
   const [emailSettings, setEmailSettings] = useState<EmailSettings>({ logoUrl: null, logoAlign: "left", logoHeight: 36, headerColor: "#003368" });
   const [savedEmailSettings, setSavedEmailSettings] = useState<EmailSettings>({ logoUrl: null, logoAlign: "left", logoHeight: 36, headerColor: "#003368" });
+
+  const [showSimulation, setShowSimulation]     = useState(false);
 
   const [campaigns, setCampaigns]               = useState<Campaign[]>([]);
   const [isLoadingCampaigns, setIsLoadingCampaigns] = useState(false);
@@ -892,9 +1044,20 @@ export default function EmailTab() {
         {/* ── Right: Preview + service status ──────────────────────────── */}
         <div className="space-y-4 lg:sticky lg:top-8">
           <div className="bg-white border border-slate-200 rounded-xl p-5">
-            <div className="flex items-center gap-2 mb-3">
-              <Users className="w-4 h-4 text-slate-400" />
-              <span className="text-sm font-bold text-slate-700">Recipient preview</span>
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-slate-400" />
+                <span className="text-sm font-bold text-slate-700">Recipient preview</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowSimulation(true)}
+                disabled={isLoadingPreview || !preview || preview.count === 0}
+                className="flex items-center gap-1.5 text-xs font-semibold text-[#003368] hover:text-white border border-[#003368]/30 hover:bg-[#003368] px-2.5 py-1.5 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                title="See the full list of recipients without sending"
+              >
+                <FlaskConical className="w-3.5 h-3.5" /> Simulate
+              </button>
             </div>
             {isLoadingPreview ? (
               <div className="flex justify-center py-4"><Loader2 className="w-5 h-5 text-[#00DF83] animate-spin" /></div>
@@ -954,6 +1117,11 @@ export default function EmailTab() {
           />
         </div>
       </div>
+
+      {/* ── Simulation modal ─────────────────────────────────────────── */}
+      {showSimulation && (
+        <SimulationModal audience={audience} onClose={() => setShowSimulation(false)} />
+      )}
 
       {/* ── Campaign history + stats ───────────────────────────────────── */}
       <div>

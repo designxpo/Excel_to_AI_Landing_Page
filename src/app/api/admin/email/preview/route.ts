@@ -6,6 +6,7 @@ export async function GET(req: NextRequest) {
   const audience = (['verified', 'unverified', 'all'] as const).includes(raw as never)
     ? (raw as 'verified' | 'unverified' | 'all')
     : 'verified';
+  const full = req.nextUrl.searchParams.get('full') === 'true';
 
   try {
     const session = await getActiveWebinarSession();
@@ -15,6 +16,7 @@ export async function GET(req: NextRequest) {
       count: recipients.length,
       sessionCode: session?.code ?? null,
       samples: recipients.slice(0, 8).map(r => ({ email: r.email, name: r.fullName })),
+      ...(full ? { all: recipients.map(r => ({ email: r.email, name: r.fullName })) } : {}),
     });
   } catch (err) {
     return NextResponse.json({ error: String(err) }, { status: 500 });
